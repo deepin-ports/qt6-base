@@ -1,12 +1,12 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 //#define QNETWORKDISKCACHE_DEBUG
 
 
 #include "qnetworkdiskcache.h"
 #include "qnetworkdiskcache_p.h"
-#include "QtCore/qscopedpointer.h"
 
 #include <qfile.h>
 #include <qdir.h>
@@ -28,6 +28,11 @@
 QT_BEGIN_NAMESPACE
 
 using namespace Qt::StringLiterals;
+
+/*!
+    \class QNetworkDiskCachePrivate
+    \internal
+*/
 
 /*!
     \class QNetworkDiskCache
@@ -62,6 +67,35 @@ using namespace Qt::StringLiterals;
     following can be applied:
 
     \snippet code/src_network_access_qnetworkdiskcache.cpp 2
+
+    \section1 Security Considerations
+
+    QNetworkDiskCache stores HTTP response bodies and metadata,
+    including response headers, to disk without encryption. The
+    compression applied to text content is for
+    storage efficiency only and does not provide confidentiality
+    protection.
+
+    Which responses are cached is primarily determined by the HTTP
+    cache control headers sent by the server. Well-configured servers
+    typically prevent caching of responses containing sensitive data
+    from authenticated sessions. However, the application cannot rely
+    on every server doing so correctly, and what the server considers
+    non-sensitive may not match the application's own requirements.
+
+    For cases where the server's caching policy is not sufficient:
+    \list
+    \li Set \l{QNetworkRequest::CacheSaveControlAttribute} to
+        \c false on requests whose responses should not be stored.
+    \li Subclass \l{QAbstractNetworkCache} to implement
+        application-specific filtering of which responses are
+        cached.
+    \endlist
+
+    Cache entries carry basic structural validation but may become
+    invalid due to disk corruption, unclean application shutdown, or
+    other causes. Applications should not treat cached data as
+    trustworthy without independent validation.
 */
 
 /*!
@@ -359,12 +393,12 @@ QIODevice *QNetworkDiskCache::data(const QUrl &url)
         buffer.reset(new QBuffer);
         buffer->setData(d->lastItem.data.data());
     } else {
-        QScopedPointer<QFile> file(new QFile(d->cacheFileName(url)));
-        if (!file->open(QFile::ReadOnly | QIODevice::Unbuffered))
+        QFile file(d->cacheFileName(url));
+        if (!file.open(QFile::ReadOnly | QIODevice::Unbuffered))
             return nullptr;
 
-        if (!d->lastItem.read(file.data(), true)) {
-            file->close();
+        if (!d->lastItem.read(&file, true)) {
+            file.close(); // On Windows the file can't be removed if it's open
             remove(url);
             return nullptr;
         }
@@ -374,7 +408,7 @@ QIODevice *QNetworkDiskCache::data(const QUrl &url)
             buffer->setData(d->lastItem.data.data());
         } else {
             buffer.reset(new QBuffer);
-            buffer->setData(file->readAll());
+            buffer->setData(file.readAll());
         }
     }
     buffer->open(QBuffer::ReadOnly);
@@ -566,6 +600,11 @@ QString QNetworkDiskCachePrivate::cacheFileName(const QUrl &url) const
     QString fullpath = dataDirectory + uniqueFileName(url);
     return  fullpath;
 }
+
+/*!
+    \class QCacheItem
+    \internal
+ */
 
 /*!
     We compress small text and JavaScript files.

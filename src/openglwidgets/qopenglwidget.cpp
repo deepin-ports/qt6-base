@@ -856,7 +856,7 @@ void QOpenGLWidgetPrivate::initialize()
     context = new QOpenGLContext;
     context->setFormat(requestedFormat);
 
-    QOpenGLContext *shareContext = contextFromRhi ? contextFromRhi : qt_gl_global_share_context();
+    QOpenGLContext *shareContext = contextFromRhi ? contextFromRhi : QOpenGLContext::globalShareContext();
     if (shareContext) {
         context->setShareContext(shareContext);
         context->setScreen(shareContext->screen());
@@ -1247,8 +1247,8 @@ QSurfaceFormat QOpenGLWidget::format() const
     been shown and thus it performed initialization.
 
     \note This function will typically have to be used in combination with a
-    QSurfaceFormat::setDefaultFormat() call that sets the color space to
-    QSurfaceFormat::sRGBColorSpace.
+    QSurfaceFormat::setColorSpace() call that sets the color space to
+    QColorSpace::SRgb.
 
     \since 5.10
  */

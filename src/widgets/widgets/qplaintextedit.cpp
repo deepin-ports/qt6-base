@@ -1,5 +1,6 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #include "qplaintextedit_p.h"
 
@@ -17,7 +18,6 @@
 #include <qmenu.h>
 #endif
 #include <qstyle.h>
-#include <qtimer.h>
 #include "private/qapplication_p.h"
 #include "private/qtextdocumentlayout_p.h"
 #include "private/qabstracttextdocumentlayout_p.h"
@@ -782,7 +782,7 @@ void QPlainTextEditPrivate::init(const QString &txt)
     if (!txt.isEmpty())
         control->setPlainText(txt);
 
-    hbar->setSingleStep(20);
+    hbar->setSingleStep(defaultSingleStep());
     vbar->setSingleStep(1);
 
     viewport->setBackgroundRole(QPalette::Base);

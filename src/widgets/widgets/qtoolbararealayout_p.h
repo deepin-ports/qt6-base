@@ -1,5 +1,6 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #ifndef QTOOLBARAREALAYOUT_P_H
 #define QTOOLBARAREALAYOUT_P_H
@@ -178,7 +179,7 @@ public:
     QLayoutItem *unplug(const QList<int> &path, QToolBarAreaLayout *other);
 
     void saveState(QDataStream &stream) const;
-    bool restoreState(QDataStream &stream, const QList<QToolBar*> &toolBars, uchar tmarker, bool testing = false);
+    bool restoreState(QDataStream &stream, const QList<QToolBar*> &toolBars, uchar tmarker, QInternal::CallMode callMode);
     bool isEmpty() const;
 };
 

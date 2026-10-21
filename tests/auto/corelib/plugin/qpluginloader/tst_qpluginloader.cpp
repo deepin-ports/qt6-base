@@ -18,6 +18,10 @@
 #  include <QtCore/private/qmachparser_p.h>
 #endif
 
+#ifdef Q_OS_ANDROID
+#include <private/qjnihelpers_p.h>
+#endif
+
 using namespace Qt::StringLiterals;
 
 // Helper macros to let us know if some suffixes are valid
@@ -59,11 +63,11 @@ using namespace Qt::StringLiterals;
 #elif defined(Q_OS_WIN)
 # undef dll_VALID
 # define dll_VALID      true
-//# ifdef QT_NO_DEBUG
+# if !defined(QT_NO_DEBUG) && defined(Q_CC_MSVC)
+#  define SUFFIX         "d.dll"
+# else
 #  define SUFFIX         ".dll"
-//# else
-//#  define SUFFIX         "d.dll"
-//# endif
+# endif
 # define PREFIX         ""
 
 #else  // all other Unix
@@ -285,7 +289,7 @@ void tst_QPluginLoader::errorString()
 
 // A bug in QNX causes the test to crash on exit after attempting to load
 // a shared library with undefined symbols (tracked as QTBUG-114682).
-#if !defined(Q_OS_WIN) && !defined(Q_OS_DARWIN) && !defined(Q_OS_HPUX) && !defined(Q_OS_QNX)
+#if defined(Q_OF_ELF) && !defined(Q_OS_QNX)
     {
     QPluginLoader loader( sys_qualifiedLibraryName("almostplugin"));     //a plugin with unresolved symbols
     loader.setLoadHints(QLibrary::ResolveAllSymbolsHint);
@@ -724,6 +728,12 @@ static void loadCorruptElf_helper(const QString &origLibrary)
     QFETCH(QString, snippet);
     QFETCH(ElfPatcher, patcher);
 
+#ifdef Q_OS_ANDROID
+    // patchElf() tries to map with private mode
+    if (QtAndroidPrivate::isUncompressedNativeLibs())
+        QSKIP("Mapping in-APK libraries with private mode is not supported on Android");
+#endif
+
     std::unique_ptr<QTemporaryFile> tmplib = patchElf(origLibrary, patcher);
 
     QPluginLoader lib(tmplib->fileName());
@@ -1150,12 +1160,12 @@ void tst_QPluginLoader::staticPlugins()
 void tst_QPluginLoader::reregisteredStaticPlugins()
 {
     // the Q_IMPORT_PLUGIN macro will have already done this
-    qRegisterStaticPluginFunction(qt_static_plugin_StaticPlugin());
+    qRegisterStaticPluginFunction(QT_MANGLE_NAMESPACE(qt_static_plugin_StaticPlugin)());
     staticPlugins();
     if (QTest::currentTestFailed())
         return;
 
-    qRegisterStaticPluginFunction(qt_static_plugin_StaticPlugin());
+    qRegisterStaticPluginFunction(QT_MANGLE_NAMESPACE(qt_static_plugin_StaticPlugin)());
     staticPlugins();
 }
 

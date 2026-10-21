@@ -1,5 +1,6 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #ifndef QDOCKAREALAYOUT_P_H
 #define QDOCKAREALAYOUT_P_H
@@ -44,7 +45,7 @@ class QTabBar;
 // which then has one QDockAreaLayoutInfo as a child. (QDockAreaLayoutItem::subInfo) or
 // a widgetItem if this is a node of the tree (QDockAreaLayoutItem::widgetItem)
 //
-// A path indetifies uniquely one object in this tree, the first number being the side and all the following
+// A path identifies uniquely one object in this tree, the first number being the side and all the following
 // indexes into the QDockAreaLayoutInfo::item_list.
 
 struct Q_AUTOTEST_EXPORT QDockAreaLayoutItem
@@ -124,7 +125,7 @@ public:
         WidgetMarker = 0xfb
     };
     void saveState(QDataStream &stream) const;
-    bool restoreState(QDataStream &stream, QList<QDockWidget*> &widgets, bool testing);
+    bool restoreState(QDataStream &stream, QList<QDockWidget*> &widgets, QInternal::CallMode);
 
     void fitItems();
     bool expansive(Qt::Orientation o) const;
@@ -143,8 +144,9 @@ public:
     int next(int idx) const;
     int prev(int idx) const;
 
-    QList<int> indexOf(QWidget *widget) const;
+    QList<int> indexOf(const QWidget *widget) const;
     QList<int> indexOfPlaceHolder(const QString &objectName) const;
+    std::unique_ptr<QLayoutItem> takeWidgetItem(QWidget *widget);
 
     QDockWidget *apply(bool animate);
 
@@ -214,10 +216,10 @@ public:
     enum { DockWidgetStateMarker = 0xfd, FloatingDockWidgetTabMarker = 0xf9 };
     static QRect constrainedRect(QRect rect, QWidget *widget);
     void saveState(QDataStream &stream) const;
-    bool restoreState(QDataStream &stream, const QList<QDockWidget*> &widgets, bool testing = false);
+    bool restoreState(QDataStream &stream, const QList<QDockWidget*> &_dockWidgets, QInternal::CallMode callMode);
 
     QList<int> indexOfPlaceHolder(const QString &objectName) const;
-    QList<int> indexOf(QWidget *dockWidget) const;
+    QList<int> indexOf(const QWidget *dockWidget) const;
     QList<int> gapIndex(const QPoint &pos, bool disallowTabs) const;
     QList<int> findSeparator(const QPoint &pos) const;
 

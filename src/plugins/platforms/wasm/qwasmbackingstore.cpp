@@ -1,5 +1,6 @@
 // Copyright (C) 2018 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #include "qwasmbackingstore.h"
 #include "qwasmwindow.h"
@@ -39,11 +40,12 @@ QPaintDevice *QWasmBackingStore::paintDevice()
 void QWasmBackingStore::flush(QWindow *window, const QRegion &region, const QPoint &offset)
 {
     Q_UNUSED(window);
-    Q_UNUSED(region);
-    Q_UNUSED(offset);
-
     m_dirty |= region;
-    m_compositor->handleBackingStoreFlush(window);
+
+    QRect updateRect = region.boundingRect();
+    updateRect.translate(offset);
+
+    m_compositor->handleBackingStoreFlush(this->window(), updateRect);
 }
 
 void QWasmBackingStore::updateTexture(QWasmWindow *window)

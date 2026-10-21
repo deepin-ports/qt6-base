@@ -143,16 +143,19 @@ QInputDevice::QInputDevice(QInputDevicePrivate &d, QObject *parent)
 }
 
 /*!
-    Returns the region within the \l{QScreen::availableVirtualGeometry}{virtual desktop}
-    that this device can access.
+    \property QInputDevice::availableVirtualGeometry
+    \brief the region within the virtual desktop that this device can access.
 
-    For example a \l {QInputDevice::DeviceType}{TouchScreen} input
-    device is fixed in place upon a single physical screen, and usually
-    calibrated so that this area is the same as QScreen::geometry(); whereas a
-    \l {QInputDevice::DeviceType}{Mouse} can probably access all screens
-    on the virtual desktop. A Wacom graphics tablet may be configured in a way
-    that it's mapped to all screens, or only to the screen where the user
-    prefers to create drawings, or to the window in which drawing occurs.
+    For example, a \l {QInputDevice::DeviceType}{TouchScreen} input
+    device is fixed in place upon a single physical screen and usually
+    calibrated so that this area is the same as QScreen::geometry(), whereas
+    a \l {QInputDevice::DeviceType}{Mouse} is typically able to access all
+    screens on the virtual desktop.
+
+    Alternatively, a Wacom graphics tablet may be configured so that it is
+    mapped to all screens, or only to the screen where the user prefers to
+    create drawings, or only to the window in which drawing occurs.
+
     A \l {QInputDevice::DeviceType}{Stylus} device that is integrated
     with a touchscreen may be physically limited to that screen.
 
@@ -164,6 +167,11 @@ QRect QInputDevice::availableVirtualGeometry() const
     Q_D(const QInputDevice);
     return d->availableVirtualGeometry;
 }
+
+/*!
+    \property QInputDevice::name
+    \brief the device name.
+*/
 
 /*!
     Returns the device name.
@@ -179,6 +187,11 @@ QString QInputDevice::name() const
 }
 
 /*!
+    \property QInputDevice::type
+    \brief the device type
+*/
+
+/*!
     Returns the device type.
 */
 QInputDevice::DeviceType QInputDevice::type() const
@@ -186,6 +199,11 @@ QInputDevice::DeviceType QInputDevice::type() const
     Q_D(const QInputDevice);
     return d->deviceType;
 }
+
+/*!
+    \property QInputDevice::capabilities
+    \brief the device capabilities.
+*/
 
 /*!
     Returns the device capabilities.
@@ -205,6 +223,11 @@ bool QInputDevice::hasCapability(QInputDevice::Capability capability) const
 }
 
 /*!
+    \property QInputDevice::systemId
+    \brief the platform-specific system ID.
+*/
+
+/*!
     Returns the platform specific system ID (for example xinput ID on the X11 platform).
 
     All platforms are expected to provide a unique system ID for each device.
@@ -214,6 +237,11 @@ qint64 QInputDevice::systemId() const
     Q_D(const QInputDevice);
     return d->systemId;
 }
+
+/*!
+    \property QInputDevice::seatName
+    \brief the seat associated with the device.
+*/
 
 /*!
     Returns the seat with which the device is associated, if known; otherwise empty.
@@ -236,7 +264,7 @@ Q_CONSTINIT static QBasicMutex devicesMutex;
     Returns a list of all registered input devices (keyboards and pointing devices).
 
     \note The list of devices is not always complete on all platforms. So far,
-    the most-complete information is available on the \l {Qt for Linux/X11}{X11}
+    the most-complete information is available on the \l {Qt for Linux}{Linux}
     platform, at startup and in response to hot-plugging. Most other platforms
     are only able to provide generic devices of various types, only after receiving
     events from them; and most platforms do not tell Qt when a device is plugged in,
@@ -348,6 +376,7 @@ void QInputDevicePrivate::registerDevice(const QInputDevice *dev)
 {
     QMutexLocker lock(&devicesMutex);
     deviceList()->append(dev);
+    qCInfo(lcQpaInputDevices) << "Registered" << dev;
 }
 
 /*!
@@ -355,8 +384,12 @@ void QInputDevicePrivate::registerDevice(const QInputDevice *dev)
 */
 void QInputDevicePrivate::unregisterDevice(const QInputDevice *dev)
 {
+    if (deviceList.isDestroyed())
+        return;     // nothing to remove!
+
     QMutexLocker lock(&devicesMutex);
     deviceList()->removeOne(dev);
+    qCInfo(lcQpaInputDevices) << "Unregistered" << dev;
 }
 
 bool QInputDevice::operator==(const QInputDevice &other) const
@@ -372,10 +405,8 @@ QDebug operator<<(QDebug debug, const QInputDevice *device)
     debug.noquote();
 
     debug << "QInputDevice(";
-    if (!device) {
-        debug << "0)";
-        return debug;
-    }
+    if (!device)
+        return debug << "0x0)";
 
     const QInputDevicePrivate *d = QInputDevicePrivate::get(device);
 

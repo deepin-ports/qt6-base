@@ -6,6 +6,7 @@
 #include <qdir.h>
 #include <qlibrary.h>
 #include <QtCore/QRegularExpression>
+#include <QtCore/private/qlibrary_p.h>
 
 
 // Helper macros to let us know if some suffixes and prefixes are valid
@@ -128,7 +129,7 @@ void tst_QLibrary::initTestCase()
     directory = paths.first();
 #else
     // chdir to our testdata directory, and use relative paths in some tests.
-    QString testdatadir = QFileInfo(QFINDTESTDATA("library_path")).absolutePath();
+    QString testdatadir = QFileInfo(QFINDTESTDATA("lib")).absolutePath();
     QVERIFY2(QDir::setCurrent(testdatadir), qPrintable("Could not chdir to " + testdatadir));
     directory = QCoreApplication::applicationDirPath();
 #endif
@@ -162,7 +163,12 @@ void tst_QLibrary::cleanup()
 
     };
     for (const auto &entry : libs) {
-        do {} while (QLibrary(entry.name, entry.version).unload());
+        bool unloaded = false;
+        do {
+            QLibrary lib(entry.name, entry.version);
+            auto libPrivate = QLibraryPrivate::get(&lib);
+            unloaded = libPrivate->unload();
+        } while (unloaded);
     }
 }
 

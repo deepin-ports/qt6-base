@@ -1,6 +1,7 @@
 // Copyright (C) 2013 BlackBerry Limited. All rights reserved.
 // Copyright (C) 2016 Intel Corporation.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:file-selection
 
 #include "qfileselector.h"
 #include "qfileselector_p.h"
@@ -335,6 +336,14 @@ void QFileSelectorPrivate::addStatics(const QStringList &statics)
     const auto locker = qt_scoped_lock(sharedDataMutex);
     sharedData->preloadedStatics << statics;
     sharedData->staticSelectors.clear();
+}
+
+qsizetype QFileSelectorPrivate::removeStatics(const QStringList &statics)
+{
+    const auto locker = qt_scoped_lock(sharedDataMutex);
+    // Clearing staticSelectors ensures that it's repopulated in QFileSelectorPrivate::updateSelectors()
+    sharedData->staticSelectors.clear();
+    return sharedData->preloadedStatics.removeIf([statics](auto &s) {return statics.contains(s, Qt::CaseSensitive);});
 }
 
 QT_END_NAMESPACE

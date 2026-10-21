@@ -3,34 +3,43 @@ Date:   Wed, 30 Sep 2026 14:04:31 +0800
 Subject: QCoreApplication: don't dispatch events while closing
 Upstream: https://codereview.qt-project.org/c/qt/qtbase/+/773760
 
----
+Refreshed for Debian forky Qt 6.11.2.
 
-Index: qt6-base/src/corelib/kernel/qcoreapplication.cpp
-===================================================================
---- qt6-base.orig/src/corelib/kernel/qcoreapplication.cpp
-+++ qt6-base/src/corelib/kernel/qcoreapplication.cpp
-@@ -958,12 +958,13 @@ QCoreApplication::~QCoreApplication()
+diff --git a/src/corelib/kernel/qcoreapplication.cpp b/src/corelib/kernel/qcoreapplication.cpp
+index d6bc1d43..5eed95d6 100644
+--- a/src/corelib/kernel/qcoreapplication.cpp
++++ b/src/corelib/kernel/qcoreapplication.cpp
+@@ -911,6 +911,11 @@ QCoreApplication::~QCoreApplication()
  
      qt_call_post_routines();
  
--    self = nullptr;
- #ifndef QT_NO_QOBJECT
-     QCoreApplicationPrivate::is_app_closing = true;
-     QCoreApplicationPrivate::is_app_running = false;
++#ifndef QT_NO_QOBJECT
++    QCoreApplicationPrivate::is_app_closing = true;
++    QCoreApplicationPrivate::is_app_running = false;
++#endif
++
+ #if QT_VERSION < QT_VERSION_CHECK(7, 0, 0)
+ #  ifdef __cpp_lib_atomic_ref
+     std::atomic_ref(self).store(nullptr, std::memory_order_relaxed);
+@@ -922,11 +927,6 @@ QCoreApplication::~QCoreApplication()
+     self.storeRelaxed(nullptr);
  #endif
  
-+    self = nullptr;
-+
+-#ifndef QT_NO_QOBJECT
+-    QCoreApplicationPrivate::is_app_closing = true;
+-    QCoreApplicationPrivate::is_app_running = false;
+-#endif
+-
  #if QT_CONFIG(thread)
      // Synchronize and stop the global thread pool threads.
      QThreadPool *globalThreadPool = nullptr;
-@@ -1157,6 +1158,9 @@ bool QCoreApplication::notifyInternal2(Q
-     QScopedScopeLevelCounter scopeLevelCounter(threadData);
+@@ -1119,6 +1119,9 @@ bool QCoreApplication::notifyInternal2(QObject *receiver, QEvent *event)
      if (!selfRequired)
          return doNotify(receiver, event);
-+        
+ 
 +    if (QCoreApplicationPrivate::is_app_closing)
 +        return false; // no event delivery while the application is closing
- 
++
  #if QT_VERSION >= QT_VERSION_CHECK(7, 0, 0)
-     if (threadData->thread.loadRelaxed() != QCoreApplicationPrivate::mainThread())
+     if (!QThread::isMainThread())
+         return false;

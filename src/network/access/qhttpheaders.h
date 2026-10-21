@@ -1,11 +1,14 @@
 // Copyright (C) 2023 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #ifndef QHTTPHEADERS_H
 #define QHTTPHEADERS_H
 
 #include <QtNetwork/qtnetworkglobal.h>
 
+#include <QtCore/qdatetime.h>
+#include <QtCore/qmetaobject.h>
 #include <QtCore/qobjectdefs.h>
 #include <QtCore/qshareddata.h>
 #include <QtCore/qcontainerfwd.h>
@@ -243,6 +246,25 @@ public:
 
     Q_NETWORK_EXPORT QByteArray combinedValue(QAnyStringView name) const;
     Q_NETWORK_EXPORT QByteArray combinedValue(WellKnownHeader name) const;
+
+    Q_NETWORK_EXPORT std::optional<qint64> intValue(QAnyStringView name) const noexcept;
+    Q_NETWORK_EXPORT std::optional<qint64> intValue(WellKnownHeader name) const noexcept;
+
+    Q_NETWORK_EXPORT std::optional<QList<qint64>> intValues(QAnyStringView name) const;
+    Q_NETWORK_EXPORT std::optional<QList<qint64>> intValues(WellKnownHeader name) const;
+
+    Q_NETWORK_EXPORT std::optional<qint64> intValueAt(qsizetype i) const noexcept;
+
+    Q_NETWORK_EXPORT std::optional<QDateTime> dateTimeValue(QAnyStringView name) const;
+    Q_NETWORK_EXPORT std::optional<QDateTime> dateTimeValue(WellKnownHeader name) const;
+
+    Q_NETWORK_EXPORT std::optional<QList<QDateTime>> dateTimeValues(QAnyStringView name) const;
+    Q_NETWORK_EXPORT std::optional<QList<QDateTime>> dateTimeValues(WellKnownHeader name) const;
+
+    Q_NETWORK_EXPORT std::optional<QDateTime> dateTimeValueAt(qsizetype i) const;
+
+    Q_NETWORK_EXPORT void setDateTimeValue(QAnyStringView name, const QDateTime &dateTime);
+    Q_NETWORK_EXPORT void setDateTimeValue(WellKnownHeader name, const QDateTime &dateTime);
 
     Q_NETWORK_EXPORT qsizetype size() const noexcept;
     Q_NETWORK_EXPORT void reserve(qsizetype size);

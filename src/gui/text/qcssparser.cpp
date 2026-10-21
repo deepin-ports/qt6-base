@@ -1,5 +1,6 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:data-parser
 
 #include "qcssparser_p.h"
 
@@ -14,7 +15,7 @@
 #include <qimagereader.h>
 #include <qtextformat.h>
 
-#include <algorithm>
+#include <QtCore/q20algorithm.h>
 
 #ifndef QT_NO_CSSPARSER
 
@@ -34,10 +35,30 @@ struct QCssKnownValue
 {
     const char name[28];
     quint64 id;
+
+    struct ByName;
 };
 
+struct QCssKnownValue::ByName
+{
+    constexpr bool operator()(const QCssKnownValue &lhs, const QCssKnownValue &rhs) const noexcept
+    { return std::string_view{lhs.name} < std::string_view{rhs.name}; }
+};
+#if !defined(Q_CC_GNU_ONLY) || Q_CC_GNU >= 1000
+#  define NOT_OLD_GCCs(...) __VA_ARGS__
+#else
+#  define NOT_OLD_GCCs(...) /* nothing */
+#endif
+#define CHECK_ARRAY_IS_SORTED(array, Num) \
+    static_assert(std::size(array) == Num); \
+    NOT_OLD_GCCs( \
+    static_assert(q20::is_sorted(std::begin(array), std::end(array), \
+                                 QCssKnownValue::ByName{})); \
+    ) /* NOT_OLD_GCCs */ \
+    /* end */
+
 // This array is sorted alphabetically.
-static const QCssKnownValue properties[NumProperties - 1] = {
+static constexpr QCssKnownValue properties[] = {
     { "-qt-background-role", QtBackgroundRole },
     { "-qt-block-indent", QtBlockIndent },
     { "-qt-fg-texture-cachekey", QtForegroundTextureCacheKey },
@@ -159,8 +180,10 @@ static const QCssKnownValue properties[NumProperties - 1] = {
     { "width", Width },
     { "word-spacing", WordSpacing }
 };
+CHECK_ARRAY_IS_SORTED(properties, size_t(NumProperties) - 1)
 
-static const QCssKnownValue values[NumKnownValues - 1] = {
+static constexpr QCssKnownValue values[] = {
+    { "accent", Value_Accent },
     { "active", Value_Active },
     { "alternate-base", Value_AlternateBase },
     { "always", Value_Always },
@@ -204,6 +227,7 @@ static const QCssKnownValue values[NumKnownValues - 1] = {
     { "midlight", Value_Midlight },
     { "miterjoin", Value_MiterJoin},
     { "native", Value_Native },
+    { "no-role", Value_NoRole },
     { "none", Value_None },
     { "normal", Value_Normal },
     { "nowrap", Value_NoWrap },
@@ -212,6 +236,7 @@ static const QCssKnownValue values[NumKnownValues - 1] = {
     { "on", Value_On },
     { "outset", Value_Outset },
     { "overline", Value_Overline },
+    { "placeholder-text", Value_PlaceholderText },
     { "pre", Value_Pre },
     { "pre-line", Value_PreLine },
     { "pre-wrap", Value_PreWrap },
@@ -230,6 +255,8 @@ static const QCssKnownValue values[NumKnownValues - 1] = {
     { "super", Value_Super },
     { "svgmiterjoin", Value_SvgMiterJoin},
     { "text", Value_Text },
+    { "tooltip-base", Value_ToolTipBase },
+    { "tooltip-text", Value_ToolTipText },
     { "top", Value_Top },
     { "transparent", Value_Transparent },
     { "underline", Value_Underline },
@@ -242,12 +269,16 @@ static const QCssKnownValue values[NumKnownValues - 1] = {
     { "x-large", Value_XLarge },
     { "xx-large", Value_XXLarge }
 };
+CHECK_ARRAY_IS_SORTED(values, size_t(NumKnownValues) - 1)
 
 //Map id to strings as they appears in the 'values' array above
-static const short indexOfId[NumKnownValues] = { 0, 44, 51, 45, 52, 53, 60, 37, 28, 78, 79, 27, 46, 6, 71, 50,
-    31, 65, 66, 29, 55, 69, 7, 11, 42, 62, 20, 14, 18, 19, 21, 23, 54, 26, 49, 75, 39, 3, 2, 43, 70, 17, 12,
-    63, 15, 34, 72, 35, 73, 61, 74, 36, 64, 22, 56, 41, 5, 57, 67, 77, 9, 30, 40, 13, 38, 68, 8, 10, 4, 76,
-    59, 24, 25, 32, 33, 1, 16, 0, 58, 48, 47 };
+static constexpr uchar indexOfId[] = {
+    0, 46, 54, 47, 55, 56, 63, 38, 29, 83, 84, 28, 48, 7, 76, 52,
+    32, 68, 69, 30, 58, 74, 8, 12, 43, 65, 21, 15, 19, 20, 22, 24, 57, 27, 51, 80, 40, 4, 3, 45, 75, 18, 13,
+    66, 16, 35, 77, 36, 78, 64, 79, 37, 67, 23, 59, 42, 6, 60, 70, 82, 10, 31, 41, 14, 39, 71, 9, 11, 5, 81,
+    62, 25, 26, 33, 34, 2, 44, 72, 73, 53, 0, 17, 1, 61, 50, 49 };
+
+static_assert(std::size(indexOfId) == size_t(NumKnownValues));
 
 QString Value::toString() const
 {
@@ -258,7 +289,7 @@ QString Value::toString() const
     }
 }
 
-static const QCssKnownValue pseudos[NumPseudos - 1] = {
+static constexpr QCssKnownValue pseudos[] = {
     { "active", PseudoClass_Active },
     { "adjoins-item", PseudoClass_Item },
     { "alternate", PseudoClass_Alternate },
@@ -304,44 +335,51 @@ static const QCssKnownValue pseudos[NumPseudos - 1] = {
     { "vertical", PseudoClass_Vertical },
     { "window", PseudoClass_Window }
 };
+CHECK_ARRAY_IS_SORTED(pseudos, size_t(NumPseudos) - 1)
 
-static const QCssKnownValue origins[NumKnownOrigins - 1] = {
+static constexpr QCssKnownValue origins[] = {
     { "border", Origin_Border },
     { "content", Origin_Content },
     { "margin", Origin_Margin }, // not in css
     { "padding", Origin_Padding }
 };
+CHECK_ARRAY_IS_SORTED(origins, size_t(NumKnownOrigins) - 1)
 
-static const QCssKnownValue repeats[NumKnownRepeats - 1] = {
+static constexpr QCssKnownValue repeats[] = {
     { "no-repeat", Repeat_None },
     { "repeat-x", Repeat_X },
     { "repeat-xy", Repeat_XY },
     { "repeat-y", Repeat_Y }
 };
+CHECK_ARRAY_IS_SORTED(repeats, size_t(NumKnownRepeats) - 1)
 
-static const QCssKnownValue tileModes[NumKnownTileModes - 1] = {
+static constexpr QCssKnownValue tileModes[] = {
     { "repeat", TileMode_Repeat },
     { "round", TileMode_Round },
     { "stretch", TileMode_Stretch },
 };
+CHECK_ARRAY_IS_SORTED(tileModes, size_t(NumKnownTileModes) - 1)
 
-static const QCssKnownValue positions[NumKnownPositionModes - 1] = {
+static constexpr QCssKnownValue positions[] = {
     { "absolute", PositionMode_Absolute },
     { "fixed", PositionMode_Fixed },
     { "relative", PositionMode_Relative },
     { "static", PositionMode_Static }
 };
+CHECK_ARRAY_IS_SORTED(positions, size_t(NumKnownPositionModes) - 1)
 
-static const QCssKnownValue attachments[NumKnownAttachments - 1] = {
+static constexpr QCssKnownValue attachments[] = {
     { "fixed", Attachment_Fixed },
     { "scroll", Attachment_Scroll }
 };
+CHECK_ARRAY_IS_SORTED(attachments, size_t(NumKnownAttachments) - 1)
 
-static const QCssKnownValue styleFeatures[NumKnownStyleFeatures - 1] = {
+static constexpr QCssKnownValue styleFeatures[] = {
     { "background-color", StyleFeature_BackgroundColor },
     { "background-gradient", StyleFeature_BackgroundGradient },
     { "none", StyleFeature_None }
 };
+CHECK_ARRAY_IS_SORTED(styleFeatures, size_t(NumKnownStyleFeatures) - 1)
 
 static bool operator<(const QString &name, const QCssKnownValue &prop)
 {
@@ -353,9 +391,12 @@ static bool operator<(const QCssKnownValue &prop, const QString &name)
     return QString::compare(QLatin1StringView(prop.name), name, Qt::CaseInsensitive) < 0;
 }
 
+#undef CHECK_ARRAY_IS_SORTED
+#undef NOT_OLD_GCCs
+
 static quint64 findKnownValue(const QString &name, const QCssKnownValue *start, int numValues)
 {
-    const QCssKnownValue *end = start + numValues - 1;
+    const QCssKnownValue *end = start + (numValues - 1);
     const QCssKnownValue *prop = std::lower_bound(start, end, name);
     if ((prop == end) || (name < *prop))
         return 0;
@@ -485,8 +526,7 @@ bool ValueExtractor::extractGeometry(int *w, int *h, int *minw, int *minh, int *
 {
     extractFont();
     bool hit = false;
-    for (int i = 0; i < declarations.size(); i++) {
-        const Declaration &decl = declarations.at(i);
+    for (const Declaration &decl : std::as_const(declarations)) {
         switch (decl.d->propertyId) {
         case Width: *w = lengthValue(decl); break;
         case Height: *h = lengthValue(decl); break;
@@ -507,8 +547,7 @@ bool ValueExtractor::extractPosition(int *left, int *top, int *right, int *botto
 {
     extractFont();
     bool hit = false;
-    for (int i = 0; i < declarations.size(); i++) {
-        const Declaration &decl = declarations.at(i);
+    for (const Declaration &decl : std::as_const(declarations)) {
         switch (decl.d->propertyId) {
         case Left: *left = lengthValue(decl); break;
         case Top: *top = lengthValue(decl); break;
@@ -530,8 +569,7 @@ bool ValueExtractor::extractBox(int *margins, int *paddings, int *spacing)
 {
     extractFont();
     bool hit = false;
-    for (int i = 0; i < declarations.size(); i++) {
-        const Declaration &decl = declarations.at(i);
+    for (const Declaration &decl : std::as_const(declarations)) {
         switch (decl.d->propertyId) {
         case PaddingLeft: paddings[LeftEdge] = lengthValue(decl); break;
         case PaddingRight: paddings[RightEdge] = lengthValue(decl); break;
@@ -554,11 +592,10 @@ bool ValueExtractor::extractBox(int *margins, int *paddings, int *spacing)
     return hit;
 }
 
-int ValueExtractor::extractStyleFeatures()
+int ValueExtractor::extractStyleFeatures() const
 {
     int features = StyleFeature_None;
-    for (int i = 0; i < declarations.size(); i++) {
-        const Declaration &decl = declarations.at(i);
+    for (const Declaration &decl : declarations) {
         if (decl.d->propertyId == QtStyleFeatures)
             features = decl.styleFeaturesValue();
     }
@@ -598,8 +635,7 @@ bool ValueExtractor::extractBorder(int *borders, QBrush *colors, BorderStyle *st
 {
     extractFont();
     bool hit = false;
-    for (int i = 0; i < declarations.size(); i++) {
-        const Declaration &decl = declarations.at(i);
+    for (const Declaration &decl : std::as_const(declarations)) {
         switch (decl.d->propertyId) {
         case BorderLeftWidth: borders[LeftEdge] = lengthValue(decl); break;
         case BorderRightWidth: borders[RightEdge] = lengthValue(decl); break;
@@ -657,8 +693,7 @@ bool ValueExtractor::extractOutline(int *borders, QBrush *colors, BorderStyle *s
 {
     extractFont();
     bool hit = false;
-    for (int i = 0; i < declarations.size(); i++) {
-        const Declaration &decl = declarations.at(i);
+    for (const Declaration &decl : std::as_const(declarations)) {
         switch (decl.d->propertyId) {
         case OutlineWidth: lengthValues(decl, borders); break;
         case OutlineColor: decl.brushValues(colors, pal); break;
@@ -731,6 +766,8 @@ static ColorData parseColorValue(QCss::Value v)
 
     const QString &identifier = lst.at(0);
     if ((identifier.compare("palette"_L1, Qt::CaseInsensitive)) == 0) {
+        static_assert((Value_LastColorRole - Value_FirstColorRole + 1) == QPalette::ColorRole::NColorRoles);
+
         int role = findKnownValue(lst.at(1).trimmed(), values, NumKnownValues);
         if (role >= Value_FirstColorRole && role <= Value_LastColorRole)
             return (QPalette::ColorRole)(role-Value_FirstColorRole);
@@ -1026,7 +1063,7 @@ static void parseShorthandBackgroundProperty(const QList<QCss::Value> &values, B
     *repeat = Repeat_XY;
     *alignment = Qt::AlignTop | Qt::AlignLeft;
 
-    for (int i = 0; i < values.size(); ++i) {
+    for (qsizetype i = 0; i < values.size(); ++i) {
         const QCss::Value &v = values.at(i);
         if (v.type == Value::Uri) {
             *image = v.variant.toString();
@@ -1067,11 +1104,10 @@ static void parseShorthandBackgroundProperty(const QList<QCss::Value> &values, B
 
 bool ValueExtractor::extractBackground(QBrush *brush, QString *image, Repeat *repeat,
                                        Qt::Alignment *alignment, Origin *origin, Attachment *attachment,
-                                       Origin *clip)
+                                       Origin *clip) const
 {
     bool hit = false;
-    for (int i = 0; i < declarations.size(); ++i) {
-        const Declaration &decl = declarations.at(i);
+    for (const Declaration &decl : declarations) {
         if (decl.d->values.isEmpty())
             continue;
         const QCss::Value &val = decl.d->values.at(0);
@@ -1218,7 +1254,7 @@ static bool setFontFamilyFromValues(const QList<QCss::Value> &values, QFont *fon
     QString family;
     QStringList families;
     bool shouldAddSpace = false;
-    for (int i = start; i < values.size(); ++i) {
+    for (qsizetype i = start; i < values.size(); ++i) {
         const QCss::Value &v = values.at(i);
         if (v.type == Value::TermOperatorComma) {
             families << family;
@@ -1244,10 +1280,10 @@ static bool setFontFamilyFromValues(const QList<QCss::Value> &values, QFont *fon
 
 static void setTextDecorationFromValues(const QList<QCss::Value> &values, QFont *font)
 {
-    for (int i = 0; i < values.size(); ++i) {
-        if (values.at(i).type != Value::KnownIdentifier)
+    for (const QCss::Value &value : values) {
+        if (value.type != Value::KnownIdentifier)
             continue;
-        switch (values.at(i).variant.toInt()) {
+        switch (value.variant.toInt()) {
             case Value_Underline: font->setUnderline(true); break;
             case Value_Overline: font->setOverline(true); break;
             case Value_LineThrough: font->setStrikeOut(true); break;
@@ -1349,8 +1385,7 @@ bool ValueExtractor::extractFont(QFont *font, int *fontSizeAdjustment)
     }
 
     bool hit = false;
-    for (int i = 0; i < declarations.size(); ++i) {
-        const Declaration &decl = declarations.at(i);
+    for (const Declaration &decl : std::as_const(declarations)) {
         if (decl.d->values.isEmpty())
             continue;
         const QCss::Value &val = decl.d->values.at(0);
@@ -1382,11 +1417,10 @@ bool ValueExtractor::extractPalette(QBrush *foreground,
                                     QBrush *selectedBackground,
                                     QBrush *alternateBackground,
                                     QBrush *placeHolderTextForeground,
-                                    QBrush *accent)
+                                    QBrush *accent) const
 {
     bool hit = false;
-    for (int i = 0; i < declarations.size(); ++i) {
-        const Declaration &decl = declarations.at(i);
+    for (const Declaration &decl : declarations) {
         switch (decl.d->propertyId) {
         case Color: *foreground = decl.brushValue(pal); break;
         case QtSelectionForeground: *selectedForeground = decl.brushValue(pal); break;
@@ -1409,11 +1443,10 @@ void ValueExtractor::extractFont()
     extractFont(&f, &dummy);
 }
 
-bool ValueExtractor::extractImage(QIcon *icon, Qt::Alignment *a, QSize *size)
+bool ValueExtractor::extractImage(QIcon *icon, Qt::Alignment *a, QSize *size) const
 {
     bool hit = false;
-    for (int i = 0; i < declarations.size(); ++i) {
-        const Declaration &decl = declarations.at(i);
+    for (const Declaration &decl : declarations) {
         switch (decl.d->propertyId) {
         case QtImage:
             *icon = decl.iconValue();
@@ -1435,7 +1468,7 @@ bool ValueExtractor::extractImage(QIcon *icon, Qt::Alignment *a, QSize *size)
     return hit;
 }
 
-bool ValueExtractor::extractIcon(QIcon *icon, QSize *size)
+bool ValueExtractor::extractIcon(QIcon *icon, QSize *size) const
 {
     // Find last declaration that specifies an icon
     const auto declaration = std::find_if(
@@ -1623,8 +1656,8 @@ QSize Declaration::sizeValue() const
         return qvariant_cast<QSize>(d->parsed);
 
     int x[2] = { 0, 0 };
-    const int count = d->values.size();
-    for (int i = 0; i < count; ++i) {
+    const qsizetype count = d->values.size();
+    for (qsizetype i = 0; i < count; ++i) {
         if (i > 1) {
             qWarning("QCssParser::sizeValue: Too many values provided");
             break;
@@ -1775,8 +1808,8 @@ int Declaration::styleFeaturesValue() const
     if (d->parsed.isValid())
         return d->parsed.toInt();
     int features = StyleFeature_None;
-    for (int i = 0; i < d->values.size(); i++) {
-        features |= static_cast<int>(findKnownValue(d->values.value(i).variant.toString(),
+    for (const Value &value : std::as_const(d->values)) {
+        features |= static_cast<int>(findKnownValue(value.variant.toString(),
                                      styleFeatures, NumKnownStyleFeatures));
     }
     d->parsed = features;
@@ -1821,6 +1854,13 @@ void Declaration::borderImageValue(QString *image, int *cuts,
             if (v.type != Value::Number)
                 break;
             cuts[i] = v.variant.toString().toInt();
+            if (cuts[i] < 0) {
+                qWarning("Declaration::borderImageValue: Invalid cut value %d at position %d",
+                         cuts[i], i);
+                cuts[0] = cuts[1] = cuts[2] = cuts[3] = -1;
+                i = 4;
+                break;
+            }
         }
         if (i == 0) cuts[0] = cuts[1] = cuts[2] = cuts[3] = 0;
         else if (i == 1) cuts[3] = cuts[2] = cuts[1] = cuts[0];
@@ -1855,8 +1895,8 @@ QList<qreal> Declaration::dashArray() const
 
     bool isValid = true;
     QList<qreal> dashes;
-    for (int i = 0; i < d->values.size(); i++) {
-        Value v = d->values[i];
+    for (qsizetype i = 0; i < d->values.size(); i++) {
+        const Value &v = d->values[i];
         // Separators must be at odd indices and Numbers at even indices.
         bool isValidSeparator = (i & 1) && v.type == Value::TermOperatorComma;
         bool isValidNumber = !(i & 1) && v.type == Value::Number;
@@ -1883,7 +1923,7 @@ QIcon Declaration::iconValue() const
         return qvariant_cast<QIcon>(d->parsed);
 
     QIcon icon;
-    for (int i = 0; i < d->values.size();) {
+    for (qsizetype i = 0; i < d->values.size();) {
         const Value &value = d->values.at(i++);
         if (value.type != Value::Uri)
             break;
@@ -1929,8 +1969,7 @@ QIcon Declaration::iconValue() const
 int Selector::specificity() const
 {
     int val = 0;
-    for (int i = 0; i < basicSelectors.size(); ++i) {
-        const BasicSelector &sel = basicSelectors.at(i);
+    for (const BasicSelector &sel : basicSelectors) {
         if (!sel.elementName.isEmpty())
             val += 1;
 
@@ -1971,11 +2010,10 @@ quint64 Selector::pseudoClass(quint64 *negated) const
 void StyleSheet::buildIndexes(Qt::CaseSensitivity nameCaseSensitivity)
 {
     QList<StyleRule> universals;
-    for (int i = 0; i < styleRules.size(); ++i) {
+    for (qsizetype i = 0; i < styleRules.size(); ++i) {
         const StyleRule &rule = styleRules.at(i);
         QList<Selector> universalsSelectors;
-        for (int j = 0; j < rule.selectors.size(); ++j) {
-            const Selector& selector = rule.selectors.at(j);
+        for (const Selector &selector : rule.selectors) {
 
             if (selector.basicSelectors.isEmpty())
                 continue;
@@ -2035,7 +2073,7 @@ QStringList StyleSelector::nodeIds(NodePtr node) const
     return QStringList(attributeValue(node, QCss::AttributeSelector{"id"_L1, {}, AttributeSelector::NoMatch}));
 }
 
-bool StyleSelector::selectorMatches(const Selector &selector, NodePtr node)
+bool StyleSelector::selectorMatches(const Selector &selector, NodePtr node) const
 {
     if (selector.basicSelectors.isEmpty())
         return false;
@@ -2048,7 +2086,7 @@ bool StyleSelector::selectorMatches(const Selector &selector, NodePtr node)
     if (selector.basicSelectors.size() <= 1)
         return false;
 
-    int i = selector.basicSelectors.size() - 1;
+    qsizetype i = selector.basicSelectors.size() - 1;
     node = duplicateNode(node);
     bool match = true;
 
@@ -2095,14 +2133,13 @@ bool StyleSelector::selectorMatches(const Selector &selector, NodePtr node)
     return match;
 }
 
-bool StyleSelector::basicSelectorMatches(const BasicSelector &sel, NodePtr node)
+bool StyleSelector::basicSelectorMatches(const BasicSelector &sel, NodePtr node) const
 {
     if (!sel.attributeSelectors.isEmpty()) {
         if (!hasAttributes(node))
             return false;
 
-        for (int i = 0; i < sel.attributeSelectors.size(); ++i) {
-            const QCss::AttributeSelector &a = sel.attributeSelectors.at(i);
+        for (const QCss::AttributeSelector &a : sel.attributeSelectors) {
 
             const QString attrValue = attributeValue(node, a);
             if (attrValue.isNull())
@@ -2162,21 +2199,26 @@ bool StyleSelector::basicSelectorMatches(const BasicSelector &sel, NodePtr node)
 }
 
 void StyleSelector::matchRule(NodePtr node, const StyleRule &rule, StyleSheetOrigin origin,
-                               int depth, QMultiMap<uint, StyleRule> *weightedRules)
+                              int depth, std::multimap<uint64_t, StyleRule> *weightedRules) const
 {
-    for (int j = 0; j < rule.selectors.size(); ++j) {
-        const Selector& selector = rule.selectors.at(j);
+    for (const Selector &selector : rule.selectors) {
         if (selectorMatches(selector, node)) {
-            uint weight = rule.order
-                        + selector.specificity() *0x100
-                        + (uint(origin) + depth)*0x100000;
+            if (uint32_t(rule.order) >= 0x100000ULL)
+                qWarning("StyleSelector: rule order is to large - style sheet"
+                         "must not contain more than 0x100000 entries");
+            if (uint32_t(selector.specificity()) >= 0x100000ULL)
+                qWarning("StyleSelector: selector specifity is to large - "
+                         "style sheet must not contain more than 0x100000 selectors "
+                         "per widget type");
+            const uint64_t weight = rule.order
+                                  + selector.specificity() * 0x100000ULL
+                                  + (uint(origin) + depth) * 0x10000000000ULL;
             StyleRule newRule = rule;
-            if (rule.selectors.size() > 1) {
-                newRule.selectors.resize(1);
-                newRule.selectors[0] = selector;
-            }
+            if (rule.selectors.size() > 1)
+                newRule.selectors.push_back(selector);
+
             //We might have rules with the same weight if they came from a rule with several selectors
-            weightedRules->insert(weight, newRule);
+            weightedRules->emplace(weight, std::move(newRule));
         }
     }
 }
@@ -2189,20 +2231,17 @@ QList<StyleRule> StyleSelector::styleRulesForNode(NodePtr node)
     if (styleSheets.isEmpty())
         return rules;
 
-    QMultiMap<uint, StyleRule> weightedRules; // (spec, rule) that will be sorted below
+    std::multimap<uint64_t, StyleRule> weightedRules; // (spec, rule) that will be sorted below
 
     //prune using indexed stylesheet
-    for (int sheetIdx = 0; sheetIdx < styleSheets.size(); ++sheetIdx) {
-        const StyleSheet &styleSheet = styleSheets.at(sheetIdx);
-        for (int i = 0; i < styleSheet.styleRules.size(); ++i) {
-            matchRule(node, styleSheet.styleRules.at(i), styleSheet.origin, styleSheet.depth, &weightedRules);
-        }
+    for (const StyleSheet &styleSheet : std::as_const(styleSheets)) {
+        for (const StyleRule &styleRule : styleSheet.styleRules)
+            matchRule(node, styleRule, styleSheet.origin, styleSheet.depth, &weightedRules);
 
         if (!styleSheet.idIndex.isEmpty()) {
-            QStringList ids = nodeIds(node);
-            for (int i = 0; i < ids.size(); i++) {
-                const QString &key = ids.at(i);
-                QMultiHash<QString, StyleRule>::const_iterator it = styleSheet.idIndex.constFind(key);
+            const QStringList ids = nodeIds(node);
+            for (const QString &key : ids) {
+                auto it = styleSheet.idIndex.constFind(key);
                 while (it != styleSheet.idIndex.constEnd() && it.key() == key) {
                     matchRule(node, it.value(), styleSheet.origin, styleSheet.depth, &weightedRules);
                     ++it;
@@ -2210,12 +2249,11 @@ QList<StyleRule> StyleSelector::styleRulesForNode(NodePtr node)
             }
         }
         if (!styleSheet.nameIndex.isEmpty()) {
-            QStringList names = nodeNames(node);
-            for (int i = 0; i < names.size(); i++) {
-                QString name = names.at(i);
+            const QStringList names = nodeNames(node);
+            for (QString name : names) {
                 if (nameCaseSensitivity == Qt::CaseInsensitive)
                     name = std::move(name).toLower();
-                QMultiHash<QString, StyleRule>::const_iterator it = styleSheet.nameIndex.constFind(name);
+                auto it = styleSheet.nameIndex.constFind(name);
                 while (it != styleSheet.nameIndex.constEnd() && it.key() == name) {
                     matchRule(node, it.value(), styleSheet.origin, styleSheet.depth, &weightedRules);
                     ++it;
@@ -2223,11 +2261,11 @@ QList<StyleRule> StyleSelector::styleRulesForNode(NodePtr node)
             }
         }
         if (!medium.isEmpty()) {
-            for (int i = 0; i < styleSheet.mediaRules.size(); ++i) {
-                if (styleSheet.mediaRules.at(i).media.contains(medium, Qt::CaseInsensitive)) {
-                    for (int j = 0; j < styleSheet.mediaRules.at(i).styleRules.size(); ++j) {
-                        matchRule(node, styleSheet.mediaRules.at(i).styleRules.at(j), styleSheet.origin,
-                               styleSheet.depth, &weightedRules);
+            for (const MediaRule &mediaRule : styleSheet.mediaRules) {
+                if (mediaRule.media.contains(medium, Qt::CaseInsensitive)) {
+                    for (const StyleRule &styleRule : mediaRule.styleRules) {
+                        matchRule(node, styleRule, styleSheet.origin,
+                                  styleSheet.depth, &weightedRules);
                     }
                 }
             }
@@ -2235,9 +2273,8 @@ QList<StyleRule> StyleSelector::styleRulesForNode(NodePtr node)
     }
 
     rules.reserve(weightedRules.size());
-    QMultiMap<uint, StyleRule>::const_iterator it = weightedRules.constBegin();
-    for ( ; it != weightedRules.constEnd() ; ++it)
-        rules += *it;
+    for (const auto &weigthedRule : weightedRules)
+        rules.push_back(std::move(weigthedRule.second));
 
     return rules;
 }
@@ -2247,13 +2284,13 @@ QList<StyleRule> StyleSelector::styleRulesForNode(NodePtr node)
 QList<Declaration> StyleSelector::declarationsForNode(NodePtr node, const char *extraPseudo)
 {
     QList<Declaration> decls;
-    QList<StyleRule> rules = styleRulesForNode(node);
-    for (int i = 0; i < rules.size(); i++) {
-        const Selector& selector = rules.at(i).selectors.at(0);
+    const QList<StyleRule> rules = styleRulesForNode(node);
+    for (const StyleRule &styleRule : rules) {
+        const Selector &selector = styleRule.selectors.at(0);
         const QString pseudoElement = selector.pseudoElement();
 
         if (extraPseudo && pseudoElement == QLatin1StringView(extraPseudo)) {
-            decls += rules.at(i).declarations;
+            decls += styleRule.declarations;
             continue;
         }
 
@@ -2261,7 +2298,7 @@ QList<Declaration> StyleSelector::declarationsForNode(NodePtr node, const char *
             continue;
         quint64 pseudoClass = selector.pseudoClass();
         if (pseudoClass == PseudoClass_Enabled || pseudoClass == PseudoClass_Unspecified)
-            decls += rules.at(i).declarations;
+            decls += styleRule.declarations;
     }
     return decls;
 }
@@ -2420,6 +2457,10 @@ bool Parser::parse(StyleSheet *styleSheet, Qt::CaseSensitivity nameCaseSensitivi
             PageRule rule;
             if (!parsePage(&rule)) return false;
             styleSheet->pageRules.append(rule);
+        } else if (testAnimation()) {
+            AnimationRule rule;
+            if (!parseAnimation(&rule)) return false;
+            styleSheet->animationRules.append(rule);
         } else if (testRuleset()) {
             StyleRule rule;
             if (!parseRuleset(&rule)) return false;
@@ -2543,6 +2584,72 @@ bool Parser::parseNextOperator(Value *value)
         case COMMA: value->type = Value::TermOperatorComma; skipSpace(); break;
         default: prev(); break;
     }
+    return true;
+}
+
+bool Parser::parseAnimation(AnimationRule *animationRule)
+{
+    skipSpace();
+    if (!test(IDENT)) return false;
+
+    animationRule->animName = lexem();
+
+    if (!next(LBRACE)) return false;
+    skipSpace();
+
+    while (test(PERCENTAGE) || test(IDENT)) {
+        AnimationRule::AnimationRuleSet set;
+        if (lookup() == PERCENTAGE) {
+            QString name = lexem();
+            name.removeLast();
+            float keyFrame = name.toFloat() / 100;
+            set.keyFrame = keyFrame;
+        } else if (lookup() == IDENT) {
+            QString name;
+            if (parseElementName(&name)) {
+                if (name == QStringLiteral("from"))
+                    set.keyFrame = 0;
+                else if (name == QStringLiteral("to"))
+                    set.keyFrame = 1;
+            }
+        }
+
+        skipSpace();
+        if (!next(LBRACE)) return false;
+        const int declarationStart = index;
+
+        do {
+            skipSpace();
+            Declaration decl;
+            const int rewind = index;
+            if (!parseNextDeclaration(&decl)) {
+                index = rewind;
+                const bool foundSemicolon = until(SEMICOLON);
+                const int semicolonIndex = index;
+
+                index = declarationStart;
+                const bool foundRBrace = until(RBRACE);
+
+                if (foundSemicolon && semicolonIndex < index) {
+                    decl = Declaration();
+                    index = semicolonIndex - 1;
+                } else {
+                    skipSpace();
+                    return foundRBrace;
+                }
+            }
+            if (!decl.isEmpty())
+                set.declarations.push_back(std::move(decl));
+        } while (test(SEMICOLON));
+
+        if (!next(RBRACE)) return false;
+        skipSpace();
+        animationRule->ruleSets.append(set);
+    }
+
+    if (!next(RBRACE)) return false;
+    skipSpace();
+
     return true;
 }
 
@@ -2939,7 +3046,7 @@ bool Parser::testAndParseUri(QString *uri)
         index = rewind;
         return false;
     }
-    *uri = args;
+    *uri = std::move(args);
     removeOptionalQuotes(uri);
     return true;
 }

@@ -1,13 +1,11 @@
-# SymbolsHelper-Confirmed: 6.8.0 amd64 arm64 i386 loong64 riscv64
+# SymbolsHelper-Confirmed: 6.11.2 amd64
 libQt6Widgets.so.6 libqt6widgets6 #MINVER#
-| libqt6widgets6 #MINVER#, qt6-base-private-abi (= 6.8.0)
+| libqt6widgets6 #MINVER#, qt6-base-private-abi (= 6.11.2)
 * Build-Depends-Package: qt6-base-dev
- NonQt@NonQt 6.8.0
+ NonQt@NonQt 6.7.2
  Qt_6@Qt_6 6.1.2
  (symver)Qt_6_PRIVATE_API 0 1
  _Z11qFadeEffectP7QWidgeti@Qt_6 6.1.2
-#MISSING: 6.8.0# _Z12qt_blurImageP8QPainterR6QImagedbbi@Qt_6 6.1.2
-#MISSING: 6.8.0# _Z12qt_blurImageR6QImagedbi@Qt_6 6.1.2
  _Z13qDrawWinPanelP8QPainterRK5QRectRK8QPalettebPK6QBrush@Qt_6 6.1.2
  _Z13qDrawWinPanelP8QPainteriiiiRK8QPalettebPK6QBrush@Qt_6 6.1.2
  _Z13qScrollEffectP7QWidgetji@Qt_6 6.1.2
@@ -18,7 +16,6 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _Z13qSmartMinSizePK7QWidget@Qt_6 6.1.2
  _Z13qSmartMinSizeRK5QSizeS1_S1_S1_RK11QSizePolicy@Qt_6 6.1.2
  _Z13qSmartSpacingPK7QLayoutN6QStyle11PixelMetricE@Qt_6 6.1.2
-#MISSING: 6.8.0# _Z13qt_halfScaledRK6QImage@Qt_6 6.1.2
  _Z14qDrawPlainRectP8QPainterRK5QRectRK6QColoriPK6QBrush@Qt_6 6.1.2
  _Z14qDrawPlainRectP8QPainteriiiiRK6QColoriPK6QBrush@Qt_6 6.1.2
  _Z14qDrawShadeLineP8QPainterRK6QPointS3_RK8QPalettebii@Qt_6 6.1.2
@@ -36,7 +33,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _Z17qt_tryModalHelperP7QWidgetPS0_@Qt_6 6.1.2
  _Z17qt_widget_privateP7QWidget@Qt_6 6.1.2
  _Z18qt_tab_all_widgetsv@Qt_6 6.1.2
- _Z21qDrawPlainRoundedRectP8QPainteriiiiddRK6QColoriPK6QBrush@Qt_6 6.8.0
+ _Z21qDrawPlainRoundedRectP8QPainteriiiiddRK6QColoriPK6QBrush@Qt_6 6.7.2
  _Z21qt_qsliderStyleOptionP7QSlider@Qt_6 6.1.2
  _Z24qt_qscrollbarStyleOptionP10QScrollBar@Qt_6 6.1.2
  _Z33qt_graphicsItem_highlightSelectedP13QGraphicsItemP8QPainterPK24QStyleOptionGraphicsItem@Qt_6 6.1.2
@@ -47,12 +44,10 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _Z57qRegisterNormalizedMetaType_QGesture__GestureCancelPolicyRK10QByteArray@Qt_6 6.4.0
  _Z59qRegisterNormalizedMetaType_QScrollerProperties__FrameRatesRK10QByteArray@Qt_6 6.4.0
  _Z64qRegisterNormalizedMetaType_QScrollerProperties__OvershootPolicyRK10QByteArray@Qt_6 6.4.0
-#MISSING: 6.8.0# _ZGVZN9QMetaType21registerConverterImplI5QListI21QPersistentModelIndexE9QIterableI13QMetaSequenceEEEbSt8functionIFbPKvPvEES_S_E10unregister@Qt_6 6.2.0
  _ZGVZN9QMetaType21registerConverterImplI5QListI4QUrlE9QIterableI13QMetaSequenceEEEbSt8functionIFbPKvPvEES_S_E10unregister@Qt_6 6.2.0
  _ZGVZN9QMetaType21registerConverterImplI5QListI6QRectFE9QIterableI13QMetaSequenceEEEbSt8functionIFbPKvPvEES_S_E10unregister@Qt_6 6.2.0
  _ZGVZN9QMetaType21registerConverterImplI5QListIN2Qt3KeyEE9QIterableI13QMetaSequenceEEEbSt8functionIFbPKvPvEES_S_E10unregister@Qt_6 6.4.0
  _ZGVZN9QMetaType21registerConverterImplI5QListIiE9QIterableI13QMetaSequenceEEEbSt8functionIFbPKvPvEES_S_E10unregister@Qt_6 6.2.0
-#MISSING: 6.8.0# _ZGVZN9QMetaType23registerMutableViewImplI5QListI21QPersistentModelIndexE9QIterableI13QMetaSequenceEEEbSt8functionIFbPvS8_EES_S_E10unregister@Qt_6 6.2.0
  _ZGVZN9QMetaType23registerMutableViewImplI5QListI4QUrlE9QIterableI13QMetaSequenceEEEbSt8functionIFbPvS8_EES_S_E10unregister@Qt_6 6.2.0
  _ZGVZN9QMetaType23registerMutableViewImplI5QListI6QRectFE9QIterableI13QMetaSequenceEEEbSt8functionIFbPvS8_EES_S_E10unregister@Qt_6 6.2.0
  _ZGVZN9QMetaType23registerMutableViewImplI5QListIN2Qt3KeyEE9QIterableI13QMetaSequenceEEEbSt8functionIFbPvS9_EES_S_E10unregister@Qt_6 6.4.0
@@ -142,33 +137,33 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN10QLCDNumberD0Ev@Qt_6 6.1.2
  _ZN10QLCDNumberD1Ev@Qt_6 6.1.2
  _ZN10QLCDNumberD2Ev@Qt_6 6.1.2
- _ZN10QRhiWidget10initializeEP17QRhiCommandBuffer@Qt_6 6.8.0
- _ZN10QRhiWidget10paintEventEP11QPaintEvent@Qt_6 6.8.0
- _ZN10QRhiWidget11qt_metacallEN11QMetaObject4CallEiPPv@Qt_6 6.8.0
- _ZN10QRhiWidget11qt_metacastEPKc@Qt_6 6.8.0
- _ZN10QRhiWidget11resizeEventEP12QResizeEvent@Qt_6 6.8.0
- _ZN10QRhiWidget12renderFailedEv@Qt_6 6.8.0
- _ZN10QRhiWidget14frameSubmittedEv@Qt_6 6.8.0
- _ZN10QRhiWidget14setSampleCountEi@Qt_6 6.8.0
- _ZN10QRhiWidget16releaseResourcesEv@Qt_6 6.8.0
- _ZN10QRhiWidget16staticMetaObjectE@Qt_6 6.8.0
- _ZN10QRhiWidget18sampleCountChangedEi@Qt_6 6.8.0
- _ZN10QRhiWidget19setAutoRenderTargetEb@Qt_6 6.8.0
- _ZN10QRhiWidget19setMirrorVerticallyEb@Qt_6 6.8.0
- _ZN10QRhiWidget20setColorBufferFormatENS_13TextureFormatE@Qt_6 6.8.0
- _ZN10QRhiWidget20setDebugLayerEnabledEb@Qt_6 6.8.0
- _ZN10QRhiWidget23mirrorVerticallyChangedEb@Qt_6 6.8.0
- _ZN10QRhiWidget23setFixedColorBufferSizeE5QSize@Qt_6 6.8.0
- _ZN10QRhiWidget24colorBufferFormatChangedENS_13TextureFormatE@Qt_6 6.8.0
- _ZN10QRhiWidget27fixedColorBufferSizeChangedERK5QSize@Qt_6 6.8.0
- _ZN10QRhiWidget5eventEP6QEvent@Qt_6 6.8.0
- _ZN10QRhiWidget6renderEP17QRhiCommandBuffer@Qt_6 6.8.0
- _ZN10QRhiWidget6setApiENS_3ApiE@Qt_6 6.8.0
- _ZN10QRhiWidgetC1EP7QWidget6QFlagsIN2Qt10WindowTypeEE@Qt_6 6.8.0
- _ZN10QRhiWidgetC2EP7QWidget6QFlagsIN2Qt10WindowTypeEE@Qt_6 6.8.0
- _ZN10QRhiWidgetD0Ev@Qt_6 6.8.0
- _ZN10QRhiWidgetD1Ev@Qt_6 6.8.0
- _ZN10QRhiWidgetD2Ev@Qt_6 6.8.0
+ _ZN10QRhiWidget10initializeEP17QRhiCommandBuffer@Qt_6 6.7.2
+ _ZN10QRhiWidget10paintEventEP11QPaintEvent@Qt_6 6.7.2
+ _ZN10QRhiWidget11qt_metacallEN11QMetaObject4CallEiPPv@Qt_6 6.7.2
+ _ZN10QRhiWidget11qt_metacastEPKc@Qt_6 6.7.2
+ _ZN10QRhiWidget11resizeEventEP12QResizeEvent@Qt_6 6.7.2
+ _ZN10QRhiWidget12renderFailedEv@Qt_6 6.7.2
+ _ZN10QRhiWidget14frameSubmittedEv@Qt_6 6.7.2
+ _ZN10QRhiWidget14setSampleCountEi@Qt_6 6.7.2
+ _ZN10QRhiWidget16releaseResourcesEv@Qt_6 6.7.2
+ _ZN10QRhiWidget16staticMetaObjectE@Qt_6 6.7.2
+ _ZN10QRhiWidget18sampleCountChangedEi@Qt_6 6.7.2
+ _ZN10QRhiWidget19setAutoRenderTargetEb@Qt_6 6.7.2
+ _ZN10QRhiWidget19setMirrorVerticallyEb@Qt_6 6.7.2
+ _ZN10QRhiWidget20setColorBufferFormatENS_13TextureFormatE@Qt_6 6.7.2
+ _ZN10QRhiWidget20setDebugLayerEnabledEb@Qt_6 6.7.2
+ _ZN10QRhiWidget23mirrorVerticallyChangedEb@Qt_6 6.7.2
+ _ZN10QRhiWidget23setFixedColorBufferSizeE5QSize@Qt_6 6.7.2
+ _ZN10QRhiWidget24colorBufferFormatChangedENS_13TextureFormatE@Qt_6 6.7.2
+ _ZN10QRhiWidget27fixedColorBufferSizeChangedERK5QSize@Qt_6 6.7.2
+ _ZN10QRhiWidget5eventEP6QEvent@Qt_6 6.7.2
+ _ZN10QRhiWidget6renderEP17QRhiCommandBuffer@Qt_6 6.7.2
+ _ZN10QRhiWidget6setApiENS_3ApiE@Qt_6 6.7.2
+ _ZN10QRhiWidgetC1EP7QWidget6QFlagsIN2Qt10WindowTypeEE@Qt_6 6.7.2
+ _ZN10QRhiWidgetC2EP7QWidget6QFlagsIN2Qt10WindowTypeEE@Qt_6 6.7.2
+ _ZN10QRhiWidgetD0Ev@Qt_6 6.7.2
+ _ZN10QRhiWidgetD1Ev@Qt_6 6.7.2
+ _ZN10QRhiWidgetD2Ev@Qt_6 6.7.2
  _ZN10QScrollBar10paintEventEP11QPaintEvent@Qt_6 6.1.2
  _ZN10QScrollBar10wheelEventEP11QWheelEvent@Qt_6 6.1.2
  _ZN10QScrollBar11qt_metacallEN11QMetaObject4CallEiPPv@Qt_6 6.1.2
@@ -179,6 +174,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN10QScrollBar16contextMenuEventEP17QContextMenuEvent@Qt_6 6.1.2
  _ZN10QScrollBar16staticMetaObjectE@Qt_6 6.1.2
  _ZN10QScrollBar17mouseReleaseEventEP11QMouseEvent@Qt_6 6.1.2
+ _ZN10QScrollBar25createStandardContextMenuE6QPoint@Qt_6 6.10.2
  _ZN10QScrollBar5eventEP6QEvent@Qt_6 6.1.2
  _ZN10QScrollBar9hideEventEP10QHideEvent@Qt_6 6.1.2
  _ZN10QScrollBarC1EN2Qt11OrientationEP7QWidget@Qt_6 6.1.2
@@ -304,7 +300,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN10QTableView8rowMovedEiii@Qt_6 6.1.2
  _ZN10QTableView8scrollToERK11QModelIndexN17QAbstractItemView10ScrollHintE@Qt_6 6.1.2
  _ZN10QTableView8setModelEP18QAbstractItemModel@Qt_6 6.1.2
- _ZN10QTableView9dropEventEP10QDropEvent@Qt_6 6.8.0
+ _ZN10QTableView9dropEventEP10QDropEvent@Qt_6 6.8.2
  _ZN10QTableView9selectRowEi@Qt_6 6.1.2
  _ZN10QTableViewC1EP7QWidget@Qt_6 6.1.2
  _ZN10QTableViewC2EP7QWidget@Qt_6 6.1.2
@@ -333,6 +329,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN11QColumnView17setSelectionModelEP19QItemSelectionModel@Qt_6 6.1.2
  _ZN11QColumnView19updatePreviewWidgetERK11QModelIndex@Qt_6 6.1.2
  _ZN11QColumnView21setResizeGripsVisibleEb@Qt_6 6.1.2
+ _ZN11QColumnView23setPreviewColumnVisibleEb@Qt_6 6.11.2
  _ZN11QColumnView8scrollToERK11QModelIndexN17QAbstractItemView10ScrollHintE@Qt_6 6.1.2
  _ZN11QColumnView8setModelEP18QAbstractItemModel@Qt_6 6.1.2
  _ZN11QColumnView9selectAllEv@Qt_6 6.1.2
@@ -350,6 +347,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN11QDockWidget11setFloatingEb@Qt_6 6.1.2
  _ZN11QDockWidget15featuresChangedE6QFlagsINS_17DockWidgetFeatureEE@Qt_6 6.1.2
  _ZN11QDockWidget15setAllowedAreasE6QFlagsIN2Qt14DockWidgetAreaEE@Qt_6 6.1.2
+ _ZN11QDockWidget15setDockLocationEN2Qt14DockWidgetAreaE@Qt_6 6.9.1
  _ZN11QDockWidget15topLevelChangedEb@Qt_6 6.1.2
  _ZN11QDockWidget16staticMetaObjectE@Qt_6 6.1.2
  _ZN11QDockWidget17setTitleBarWidgetEP7QWidget@Qt_6 6.1.2
@@ -394,7 +392,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN11QFileDialog15getOpenFileUrlsEP7QWidgetRK7QStringRK4QUrlS4_PS2_6QFlagsINS_6OptionEERK5QListIS2_E@Qt_6 6.1.2
  _ZN11QFileDialog15getSaveFileNameEP7QWidgetRK7QStringS4_S4_PS2_6QFlagsINS_6OptionEE@Qt_6 6.1.2
  _ZN11QFileDialog15saveFileContentERK10QByteArrayRK7QString@Qt_6 6.1.2
- _ZN11QFileDialog15saveFileContentERK10QByteArrayRK7QStringP7QWidget@Qt_6 6.8.0
+ _ZN11QFileDialog15saveFileContentERK10QByteArrayRK7QStringP7QWidget@Qt_6 6.7.2
  _ZN11QFileDialog15setDirectoryUrlERK4QUrl@Qt_6 6.1.2
  _ZN11QFileDialog15setIconProviderEP25QAbstractFileIconProvider@Qt_6 6.1.2
  _ZN11QFileDialog15setItemDelegateEP21QAbstractItemDelegate@Qt_6 6.1.2
@@ -405,7 +403,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN11QFileDialog16staticMetaObjectE@Qt_6 6.1.2
  _ZN11QFileDialog17currentUrlChangedERK4QUrl@Qt_6 6.1.2
  _ZN11QFileDialog18getOpenFileContentERK7QStringRKSt8functionIFvS2_RK10QByteArrayEE@Qt_6 6.1.2
- _ZN11QFileDialog18getOpenFileContentERK7QStringRKSt8functionIFvS2_RK10QByteArrayEEP7QWidget@Qt_6 6.8.0
+ _ZN11QFileDialog18getOpenFileContentERK7QStringRKSt8functionIFvS2_RK10QByteArrayEEP7QWidget@Qt_6 6.7.2
  _ZN11QFileDialog18setMimeTypeFiltersERK5QListI7QStringE@Qt_6 6.1.2
  _ZN11QFileDialog19directoryUrlEnteredERK4QUrl@Qt_6 6.1.2
  _ZN11QFileDialog19setSupportedSchemesERK5QListI7QStringE@Qt_6 6.1.2
@@ -648,6 +646,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN11QListWidget20itemSelectionChangedEv@Qt_6 6.1.2
  _ZN11QListWidget20openPersistentEditorEP15QListWidgetItem@Qt_6 6.1.2
  _ZN11QListWidget21closePersistentEditorEP15QListWidgetItem@Qt_6 6.1.2
+ _ZN11QListWidget23setSupportedDragActionsE6QFlagsIN2Qt10DropActionEE@Qt_6 6.10.2
  _ZN11QListWidget5clearEv@Qt_6 6.1.2
  _ZN11QListWidget5eventEP6QEvent@Qt_6 6.1.2
  _ZN11QListWidget8editItemEP15QListWidgetItem@Qt_6 6.1.2
@@ -923,6 +922,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN11QTreeWidget20itemSelectionChangedEv@Qt_6 6.1.2
  _ZN11QTreeWidget20openPersistentEditorEP15QTreeWidgetItemi@Qt_6 6.1.2
  _ZN11QTreeWidget21closePersistentEditorEP15QTreeWidgetItemi@Qt_6 6.1.2
+ _ZN11QTreeWidget23setSupportedDragActionsE6QFlagsIN2Qt10DropActionEE@Qt_6 6.10.2
  _ZN11QTreeWidget5clearEv@Qt_6 6.1.2
  _ZN11QTreeWidget5eventEP6QEvent@Qt_6 6.1.2
  _ZN11QTreeWidget8editItemEP15QTreeWidgetItemi@Qt_6 6.1.2
@@ -1158,6 +1158,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN12QRadioButtonD0Ev@Qt_6 6.1.2
  _ZN12QRadioButtonD1Ev@Qt_6 6.1.2
  _ZN12QRadioButtonD2Ev@Qt_6 6.1.2
+ _ZN12QStyleHelper10uniqueNameERK7QStringPK12QStyleOptionRK5QSized@Qt_6 6.8.2
  _ZN12QStyleHelper11hasAncestorEP7QObjectN11QAccessible4RoleE@Qt_6 6.1.2
  _ZN12QStyleHelper12isInstanceOfEP7QObjectN11QAccessible4RoleE@Qt_6 6.1.2
  _ZN12QStyleHelper15backgroundColorERK8QPalettePK7QWidget@Qt_6 6.1.2
@@ -1222,6 +1223,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN12QTableWidget21setVerticalHeaderItemEiP16QTableWidgetItem@Qt_6 6.1.2
  _ZN12QTableWidget22takeVerticalHeaderItemEi@Qt_6 6.1.2
  _ZN12QTableWidget23setHorizontalHeaderItemEiP16QTableWidgetItem@Qt_6 6.1.2
+ _ZN12QTableWidget23setSupportedDragActionsE6QFlagsIN2Qt10DropActionEE@Qt_6 6.10.2
  _ZN12QTableWidget23setVerticalHeaderLabelsERK5QListI7QStringE@Qt_6 6.1.2
  _ZN12QTableWidget24takeHorizontalHeaderItemEi@Qt_6 6.1.2
  _ZN12QTableWidget25setHorizontalHeaderLabelsERK5QListI7QStringE@Qt_6 6.1.2
@@ -1283,7 +1285,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN13QDateTimeEdit11setCalendarE9QCalendar@Qt_6 6.1.2
  _ZN13QDateTimeEdit11setDateTimeERK9QDateTime@Qt_6 6.1.2
  _ZN13QDateTimeEdit11setTimeSpecEN2Qt8TimeSpecE@Qt_6 6.1.2
- _ZN13QDateTimeEdit11setTimeZoneERK9QTimeZone@Qt_6 6.8.0
+ _ZN13QDateTimeEdit11setTimeZoneERK9QTimeZone@Qt_6 6.7.2
  _ZN13QDateTimeEdit11timeChangedE5QTime@Qt_6 6.1.2
  _ZN13QDateTimeEdit12focusInEventEP11QFocusEvent@Qt_6 6.1.2
  _ZN13QDateTimeEdit12setDateRangeE5QDateS0_@Qt_6 6.1.2
@@ -1571,7 +1573,6 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN13QMdiSubWindowD0Ev@Qt_6 6.1.2
  _ZN13QMdiSubWindowD1Ev@Qt_6 6.1.2
  _ZN13QMdiSubWindowD2Ev@Qt_6 6.1.2
-#MISSING: 6.8.0# _ZN13QMetaSequence12MetaSequenceI5QListI21QPersistentModelIndexEE5valueE@Qt_6 6.1.2
  _ZN13QMetaSequence12MetaSequenceI5QListI4QUrlEE5valueE@Qt_6 6.1.2
  _ZN13QMetaSequence12MetaSequenceI5QListI6QRectFEE5valueE@Qt_6 6.1.2
  _ZN13QMetaSequence12MetaSequenceI5QListIN2Qt3KeyEEE5valueE@Qt_6 6.4.0
@@ -1842,6 +1843,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN14QStackedLayout11qt_metacallEN11QMetaObject4CallEiPPv@Qt_6 6.1.2
  _ZN14QStackedLayout11qt_metacastEPKc@Qt_6 6.1.2
  _ZN14QStackedLayout11setGeometryERK5QRect@Qt_6 6.1.2
+ _ZN14QStackedLayout11widgetAddedEi@Qt_6 6.9.1
  _ZN14QStackedLayout12insertWidgetEiP7QWidget@Qt_6 6.1.2
  _ZN14QStackedLayout13widgetRemovedEi@Qt_6 6.1.2
  _ZN14QStackedLayout14currentChangedEi@Qt_6 6.1.2
@@ -1863,6 +1865,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN14QStackedLayoutD2Ev@Qt_6 6.1.2
  _ZN14QStackedWidget11qt_metacallEN11QMetaObject4CallEiPPv@Qt_6 6.1.2
  _ZN14QStackedWidget11qt_metacastEPKc@Qt_6 6.1.2
+ _ZN14QStackedWidget11widgetAddedEi@Qt_6 6.9.1
  _ZN14QStackedWidget12insertWidgetEiP7QWidget@Qt_6 6.1.2
  _ZN14QStackedWidget12removeWidgetEP7QWidget@Qt_6 6.1.2
  _ZN14QStackedWidget13widgetRemovedEi@Qt_6 6.1.2
@@ -2264,6 +2267,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN16QAbstractSpinBox13focusOutEventEP11QFocusEvent@Qt_6 6.1.2
  _ZN16QAbstractSpinBox13interpretTextEv@Qt_6 6.1.2
  _ZN16QAbstractSpinBox13keyPressEventEP9QKeyEvent@Qt_6 6.1.2
+ _ZN16QAbstractSpinBox13returnPressedEv@Qt_6 6.10.2
  _ZN16QAbstractSpinBox14mouseMoveEventEP11QMouseEvent@Qt_6 6.1.2
  _ZN16QAbstractSpinBox14setAcceleratedEb@Qt_6 6.1.2
  _ZN16QAbstractSpinBox15editingFinishedEv@Qt_6 6.1.2
@@ -2413,6 +2417,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN17QAbstractItemView17scrollDirtyRegionEii@Qt_6 6.1.2
  _ZN17QAbstractItemView17setSelectionModelEP19QItemSelectionModel@Qt_6 6.1.2
  _ZN17QAbstractItemView18focusNextPrevChildEb@Qt_6 6.1.2
+ _ZN17QAbstractItemView18setUpdateThresholdEi@Qt_6 6.9.1
  _ZN17QAbstractItemView19setAutoScrollMarginEi@Qt_6 6.1.2
  _ZN17QAbstractItemView19setTabKeyNavigationEb@Qt_6 6.1.2
  _ZN17QAbstractItemView20openPersistentEditorERK11QModelIndex@Qt_6 6.1.2
@@ -2424,6 +2429,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN17QAbstractItemView21setDropIndicatorShownEb@Qt_6 6.1.2
  _ZN17QAbstractItemView21setItemDelegateForRowEiP21QAbstractItemDelegate@Qt_6 6.1.2
  _ZN17QAbstractItemView21setVerticalScrollModeENS_10ScrollModeE@Qt_6 6.1.2
+ _ZN17QAbstractItemView22setKeyboardSearchFlagsE6QFlagsIN2Qt9MatchFlagEE@Qt_6 6.11.2
  _ZN17QAbstractItemView22updateEditorGeometriesEv@Qt_6 6.1.2
  _ZN17QAbstractItemView23resetVerticalScrollModeEv@Qt_6 6.1.2
  _ZN17QAbstractItemView23setAlternatingRowColorsEb@Qt_6 6.1.2
@@ -2459,7 +2465,9 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN17QAccessibleWidget14interface_castEN11QAccessible13InterfaceTypeE@Qt_6 6.1.2
  _ZN17QAccessibleWidget20addControllingSignalERK7QString@Qt_6 6.1.2
  _ZN17QAccessibleWidget8doActionERK7QString@Qt_6 6.1.2
+ _ZN17QAccessibleWidgetC1EP7QWidgetN11QAccessible4RoleE@Qt_6 6.10.2
  _ZN17QAccessibleWidgetC1EP7QWidgetN11QAccessible4RoleERK7QString@Qt_6 6.1.2
+ _ZN17QAccessibleWidgetC2EP7QWidgetN11QAccessible4RoleE@Qt_6 6.10.2
  _ZN17QAccessibleWidgetC2EP7QWidgetN11QAccessible4RoleERK7QString@Qt_6 6.1.2
  _ZN17QAccessibleWidgetD0Ev@Qt_6 6.1.2
  _ZN17QAccessibleWidgetD1Ev@Qt_6 6.1.2
@@ -2699,6 +2707,14 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN19QAbstractScrollAreaD0Ev@Qt_6 6.1.2
  _ZN19QAbstractScrollAreaD1Ev@Qt_6 6.1.2
  _ZN19QAbstractScrollAreaD2Ev@Qt_6 6.1.2
+ _ZN19QAccessibleWidgetV214interface_castEN11QAccessible13InterfaceTypeE@Qt_6 6.10.2
+ _ZN19QAccessibleWidgetV2C1EP7QWidgetN11QAccessible4RoleE@Qt_6 6.10.2
+ _ZN19QAccessibleWidgetV2C1EP7QWidgetN11QAccessible4RoleERK7QString@Qt_6 6.10.2
+ _ZN19QAccessibleWidgetV2C2EP7QWidgetN11QAccessible4RoleE@Qt_6 6.10.2
+ _ZN19QAccessibleWidgetV2C2EP7QWidgetN11QAccessible4RoleERK7QString@Qt_6 6.10.2
+ _ZN19QAccessibleWidgetV2D0Ev@Qt_6 6.10.2
+ _ZN19QAccessibleWidgetV2D1Ev@Qt_6 6.10.2
+ _ZN19QAccessibleWidgetV2D2Ev@Qt_6 6.10.2
  _ZN19QGraphicsBlurEffect11qt_metacallEN11QMetaObject4CallEiPPv@Qt_6 6.1.2
  _ZN19QGraphicsBlurEffect11qt_metacastEPKc@Qt_6 6.1.2
  _ZN19QGraphicsBlurEffect12setBlurHintsE6QFlagsINS_8BlurHintEE@Qt_6 6.1.2
@@ -2923,6 +2939,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN21QAbstractItemDelegate11qt_metacastEPKc@Qt_6 6.1.2
  _ZN21QAbstractItemDelegate15sizeHintChangedERK11QModelIndex@Qt_6 6.1.2
  _ZN21QAbstractItemDelegate16staticMetaObjectE@Qt_6 6.1.2
+ _ZN21QAbstractItemDelegate17handleEditorEventEP7QObjectP6QEvent@Qt_6 6.10.2
  _ZN21QAbstractItemDelegate9helpEventEP10QHelpEventP17QAbstractItemViewRK20QStyleOptionViewItemRK11QModelIndex@Qt_6 6.1.2
  _ZN21QAbstractItemDelegateC1EP7QObject@Qt_6 6.1.2
  _ZN21QAbstractItemDelegateC1ER14QObjectPrivateP7QObject@Qt_6 6.1.2
@@ -3007,6 +3024,8 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN22QStyleOptionDockWidgetC1Ev@Qt_6 6.1.2
  _ZN22QStyleOptionDockWidgetC2Ei@Qt_6 6.1.2
  _ZN22QStyleOptionDockWidgetC2Ev@Qt_6 6.1.2
+ _ZN22QStyleOptionMenuItemV2C1Ei@Qt_6 6.11.2
+ _ZN22QStyleOptionMenuItemV2C2Ei@Qt_6 6.11.2
  _ZN22QStyleOptionRubberBandC1Ei@Qt_6 6.1.2
  _ZN22QStyleOptionRubberBandC1Ev@Qt_6 6.1.2
  _ZN22QStyleOptionRubberBandC2Ei@Qt_6 6.1.2
@@ -3282,9 +3301,14 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN5QMenuD0Ev@Qt_6 6.1.2
  _ZN5QMenuD1Ev@Qt_6 6.1.2
  _ZN5QMenuD2Ev@Qt_6 6.1.2
+ _ZN5QTest20qWaitForWindowActiveEP7QWidget14QDeadlineTimer@Qt_6 6.10.2
+ _ZN5QTest20qWaitForWindowActiveEP7QWidget@Qt_6 6.10.2
  _ZN5QTest20qWaitForWindowActiveEP7QWidgeti@Qt_6 6.1.2
+ _ZN5QTest21qWaitForWindowExposedEP7QWidget14QDeadlineTimer@Qt_6 6.10.2
+ _ZN5QTest21qWaitForWindowExposedEP7QWidget@Qt_6 6.10.2
  _ZN5QTest21qWaitForWindowExposedEP7QWidgeti@Qt_6 6.1.2
- _ZN5QTest21qWaitForWindowFocusedEP7QWidget14QDeadlineTimer@Qt_6 6.8.0
+ _ZN5QTest21qWaitForWindowFocusedEP7QWidget14QDeadlineTimer@Qt_6 6.7.2
+ _ZN5QTest21qWaitForWindowFocusedEP7QWidget@Qt_6 6.10.2
  _ZN5QTest25QTouchEventWidgetSequence10stationaryEi@Qt_6 6.1.2
  _ZN5QTest25QTouchEventWidgetSequence11mapToScreenEP7QWidgetRK6QPoint@Qt_6 6.1.2
  _ZN5QTest25QTouchEventWidgetSequence4moveEiRK6QPointP7QWidget@Qt_6 6.1.2
@@ -3424,9 +3448,12 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN7QLayout17setSizeConstraintENS_14SizeConstraintE@Qt_6 6.1.2
  _ZN7QLayout18setContentsMarginsERK8QMargins@Qt_6 6.1.2
  _ZN7QLayout18setContentsMarginsEiiii@Qt_6 6.1.2
+ _ZN7QLayout18setSizeConstraintsENS_14SizeConstraintES0_@Qt_6 6.10.2
  _ZN7QLayout20unsetContentsMarginsEv@Qt_6 6.1.2
  _ZN7QLayout21closestAcceptableSizeEPK7QWidgetRK5QSize@Qt_6 6.1.2
  _ZN7QLayout23activateRecursiveHelperEP11QLayoutItem@Qt_6 6.1.2
+ _ZN7QLayout25setVerticalSizeConstraintENS_14SizeConstraintE@Qt_6 6.10.2
+ _ZN7QLayout27setHorizontalSizeConstraintENS_14SizeConstraintE@Qt_6 6.10.2
  _ZN7QLayout6layoutEv@Qt_6 6.1.2
  _ZN7QLayout6updateEv@Qt_6 6.1.2
  _ZN7QLayout8activateEv@Qt_6 6.1.2
@@ -3627,6 +3654,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN7QWidget21setAutoFillBackgroundEb@Qt_6 6.1.2
  _ZN7QWidget21setShortcutAutoRepeatEib@Qt_6 6.1.2
  _ZN7QWidget21windowIconTextChangedERK7QString@Qt_6 6.1.2
+ _ZN7QWidget23setAccessibleIdentifierERK7QString@Qt_6 6.9.1
  _ZN7QWidget24setAccessibleDescriptionERK7QString@Qt_6 6.1.2
  _ZN7QWidget26customContextMenuRequestedERK6QPoint@Qt_6 6.1.2
  (subst)_ZN7QWidget4findE{quintptr}@Qt_6 6.1.2
@@ -3909,7 +3937,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN9QCheckBox14mouseMoveEventEP11QMouseEvent@Qt_6 6.1.2
  _ZN9QCheckBox14nextCheckStateEv@Qt_6 6.1.2
  _ZN9QCheckBox16staticMetaObjectE@Qt_6 6.1.2
- _ZN9QCheckBox17checkStateChangedEN2Qt10CheckStateE@Qt_6 6.8.0
+ _ZN9QCheckBox17checkStateChangedEN2Qt10CheckStateE@Qt_6 6.7.2
  _ZN9QCheckBox5eventEP6QEvent@Qt_6 6.1.2
  _ZN9QCheckBoxC1EP7QWidget@Qt_6 6.1.2
  _ZN9QCheckBoxC1ERK7QStringP7QWidget@Qt_6 6.1.2
@@ -3972,6 +4000,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN9QComboBox18setMaxVisibleItemsEi@Qt_6 6.1.2
  _ZN9QComboBox18setPlaceholderTextERK7QString@Qt_6 6.1.2
  _ZN9QComboBox19currentIndexChangedEi@Qt_6 6.1.2
+ _ZN9QComboBox19setLabelDrawingModeENS_16LabelDrawingModeE@Qt_6 6.9.1
  _ZN9QComboBox19setSizeAdjustPolicyENS_16SizeAdjustPolicyE@Qt_6 6.1.2
  _ZN9QComboBox20setDuplicatesEnabledEb@Qt_6 6.1.2
  _ZN9QComboBox24setMinimumContentsLengthEi@Qt_6 6.1.2
@@ -4100,6 +4129,8 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN9QLineEditD0Ev@Qt_6 6.1.2
  _ZN9QLineEditD1Ev@Qt_6 6.1.2
  _ZN9QLineEditD2Ev@Qt_6 6.1.2
+ _ZN9QListView11eventFilterEP7QObjectP6QEvent@Qt_6 6.11.2+dfsg-5deepin1
+ _ZN9QListView15mousePressEventEP11QMouseEvent@Qt_6 6.11.2+dfsg-5deepin1
  _ZN9QListView10moveCursorEN17QAbstractItemView12CursorActionE6QFlagsIN2Qt16KeyboardModifierEE@Qt_6 6.1.2
  _ZN9QListView10paintEventEP11QPaintEvent@Qt_6 6.1.2
  _ZN9QListView10setSpacingEi@Qt_6 6.1.2
@@ -4465,21 +4496,21 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZNK10QLCDNumber5valueEv@Qt_6 6.1.2
  _ZNK10QLCDNumber8intValueEv@Qt_6 6.1.2
  _ZNK10QLCDNumber8sizeHintEv@Qt_6 6.1.2
- _ZNK10QRhiWidget10metaObjectEv@Qt_6 6.8.0
- _ZNK10QRhiWidget11sampleCountEv@Qt_6 6.8.0
- _ZNK10QRhiWidget12colorTextureEv@Qt_6 6.8.0
- _ZNK10QRhiWidget12renderTargetEv@Qt_6 6.8.0
- _ZNK10QRhiWidget14resolveTextureEv@Qt_6 6.8.0
- _ZNK10QRhiWidget15grabFramebufferEv@Qt_6 6.8.0
- _ZNK10QRhiWidget15msaaColorBufferEv@Qt_6 6.8.0
- _ZNK10QRhiWidget17colorBufferFormatEv@Qt_6 6.8.0
- _ZNK10QRhiWidget18depthStencilBufferEv@Qt_6 6.8.0
- _ZNK10QRhiWidget19isDebugLayerEnabledEv@Qt_6 6.8.0
- _ZNK10QRhiWidget20fixedColorBufferSizeEv@Qt_6 6.8.0
- _ZNK10QRhiWidget25isAutoRenderTargetEnabledEv@Qt_6 6.8.0
- _ZNK10QRhiWidget25isMirrorVerticallyEnabledEv@Qt_6 6.8.0
- _ZNK10QRhiWidget3apiEv@Qt_6 6.8.0
- _ZNK10QRhiWidget3rhiEv@Qt_6 6.8.0
+ _ZNK10QRhiWidget10metaObjectEv@Qt_6 6.7.2
+ _ZNK10QRhiWidget11sampleCountEv@Qt_6 6.7.2
+ _ZNK10QRhiWidget12colorTextureEv@Qt_6 6.7.2
+ _ZNK10QRhiWidget12renderTargetEv@Qt_6 6.7.2
+ _ZNK10QRhiWidget14resolveTextureEv@Qt_6 6.7.2
+ _ZNK10QRhiWidget15grabFramebufferEv@Qt_6 6.7.2
+ _ZNK10QRhiWidget15msaaColorBufferEv@Qt_6 6.7.2
+ _ZNK10QRhiWidget17colorBufferFormatEv@Qt_6 6.7.2
+ _ZNK10QRhiWidget18depthStencilBufferEv@Qt_6 6.7.2
+ _ZNK10QRhiWidget19isDebugLayerEnabledEv@Qt_6 6.7.2
+ _ZNK10QRhiWidget20fixedColorBufferSizeEv@Qt_6 6.7.2
+ _ZNK10QRhiWidget25isAutoRenderTargetEnabledEv@Qt_6 6.7.2
+ _ZNK10QRhiWidget25isMirrorVerticallyEnabledEv@Qt_6 6.7.2
+ _ZNK10QRhiWidget3apiEv@Qt_6 6.7.2
+ _ZNK10QRhiWidget3rhiEv@Qt_6 6.7.2
  _ZNK10QScrollBar10metaObjectEv@Qt_6 6.1.2
  _ZNK10QScrollBar15initStyleOptionEP18QStyleOptionSlider@Qt_6 6.1.2
  _ZNK10QScrollBar8sizeHintEv@Qt_6 6.1.2
@@ -4553,11 +4584,13 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZNK11QColumnView16horizontalOffsetEv@Qt_6 6.1.2
  _ZNK11QColumnView16initializeColumnEP17QAbstractItemView@Qt_6 6.1.2
  _ZNK11QColumnView18resizeGripsVisibleEv@Qt_6 6.1.2
+ _ZNK11QColumnView22isPreviewColumnVisibleEv@Qt_6 6.11.2
  _ZNK11QColumnView24visualRegionForSelectionERK14QItemSelection@Qt_6 6.1.2
  _ZNK11QColumnView7indexAtERK6QPoint@Qt_6 6.1.2
  _ZNK11QColumnView8sizeHintEv@Qt_6 6.1.2
  _ZNK11QDockWidget10metaObjectEv@Qt_6 6.1.2
  _ZNK11QDockWidget12allowedAreasEv@Qt_6 6.1.2
+ _ZNK11QDockWidget12dockLocationEv@Qt_6 6.9.1
  _ZNK11QDockWidget14titleBarWidgetEv@Qt_6 6.1.2
  _ZNK11QDockWidget15initStyleOptionEP22QStyleOptionDockWidget@Qt_6 6.1.2
  _ZNK11QDockWidget16toggleViewActionEv@Qt_6 6.1.2
@@ -4705,6 +4738,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZNK11QListWidget13selectedItemsEv@Qt_6 6.1.2
  _ZNK11QListWidget14visualItemRectEPK15QListWidgetItem@Qt_6 6.1.2
  _ZNK11QListWidget16isSortingEnabledEv@Qt_6 6.1.2
+ _ZNK11QListWidget20supportedDragActionsEv@Qt_6 6.10.2
  _ZNK11QListWidget20supportedDropActionsEv@Qt_6 6.1.2
  _ZNK11QListWidget22isPersistentEditorOpenEP15QListWidgetItem@Qt_6 6.1.2
  _ZNK11QListWidget3rowEPK15QListWidgetItem@Qt_6 6.1.2
@@ -4836,6 +4870,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZNK11QTreeWidget17invisibleRootItemEv@Qt_6 6.1.2
  _ZNK11QTreeWidget17topLevelItemCountEv@Qt_6 6.1.2
  _ZNK11QTreeWidget19indexOfTopLevelItemEP15QTreeWidgetItem@Qt_6 6.1.2
+ _ZNK11QTreeWidget20supportedDragActionsEv@Qt_6 6.10.2
  _ZNK11QTreeWidget20supportedDropActionsEv@Qt_6 6.1.2
  _ZNK11QTreeWidget22isPersistentEditorOpenEP15QTreeWidgetItemi@Qt_6 6.1.2
  _ZNK11QTreeWidget6itemAtERK6QPoint@Qt_6 6.1.2
@@ -4955,6 +4990,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZNK12QTableWidget16isSortingEnabledEv@Qt_6 6.1.2
  _ZNK12QTableWidget18verticalHeaderItemEi@Qt_6 6.1.2
  _ZNK12QTableWidget20horizontalHeaderItemEi@Qt_6 6.1.2
+ _ZNK12QTableWidget20supportedDragActionsEv@Qt_6 6.10.2
  _ZNK12QTableWidget20supportedDropActionsEv@Qt_6 6.1.2
  _ZNK12QTableWidget22isPersistentEditorOpenEP16QTableWidgetItem@Qt_6 6.1.2
  _ZNK12QTableWidget3rowEPK16QTableWidgetItem@Qt_6 6.1.2
@@ -5005,7 +5041,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZNK13QDateTimeEdit8dateTimeEv@Qt_6 6.1.2
  _ZNK13QDateTimeEdit8sizeHintEv@Qt_6 6.1.2
  _ZNK13QDateTimeEdit8timeSpecEv@Qt_6 6.1.2
- _ZNK13QDateTimeEdit8timeZoneEv@Qt_6 6.8.0
+ _ZNK13QDateTimeEdit8timeZoneEv@Qt_6 6.7.2
  _ZNK13QDateTimeEdit8validateER7QStringRi@Qt_6 6.1.2
  _ZNK13QDateTimeEdit9sectionAtEi@Qt_6 6.1.2
  _ZNK13QErrorMessage10metaObjectEv@Qt_6 6.1.2
@@ -5503,6 +5539,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZNK17QAbstractItemView14selectionModelEv@Qt_6 6.1.2
  _ZNK17QAbstractItemView14sizeHintForRowEi@Qt_6 6.1.2
  _ZNK17QAbstractItemView15selectedIndexesEv@Qt_6 6.1.2
+ _ZNK17QAbstractItemView15updateThresholdEv@Qt_6 6.9.1
  _ZNK17QAbstractItemView16autoScrollMarginEv@Qt_6 6.1.2
  _ZNK17QAbstractItemView16inputMethodQueryEN2Qt16InputMethodQueryE@Qt_6 6.1.2
  _ZNK17QAbstractItemView16selectionCommandERK11QModelIndexPK6QEvent@Qt_6 6.1.2
@@ -5517,6 +5554,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZNK17QAbstractItemView18initViewItemOptionEP20QStyleOptionViewItem@Qt_6 6.1.2
  _ZNK17QAbstractItemView18itemDelegateForRowEi@Qt_6 6.1.2
  _ZNK17QAbstractItemView18verticalScrollModeEv@Qt_6 6.1.2
+ _ZNK17QAbstractItemView19keyboardSearchFlagsEv@Qt_6 6.11.2
  _ZNK17QAbstractItemView20alternatingRowColorsEv@Qt_6 6.1.2
  _ZNK17QAbstractItemView20horizontalScrollModeEv@Qt_6 6.1.2
  _ZNK17QAbstractItemView20itemDelegateForIndexERK11QModelIndex@Qt_6 6.1.2
@@ -5639,6 +5677,8 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZNK19QAbstractScrollArea25horizontalScrollBarPolicyEv@Qt_6 6.1.2
  _ZNK19QAbstractScrollArea8sizeHintEv@Qt_6 6.1.2
  _ZNK19QAbstractScrollArea8viewportEv@Qt_6 6.1.2
+ _ZNK19QAccessibleWidgetV213attributeKeysEv@Qt_6 6.10.2
+ _ZNK19QAccessibleWidgetV214attributeValueEN11QAccessible9AttributeE@Qt_6 6.10.2
  _ZNK19QGraphicsBlurEffect10blurRadiusEv@Qt_6 6.1.2
  _ZNK19QGraphicsBlurEffect10metaObjectEv@Qt_6 6.1.2
  _ZNK19QGraphicsBlurEffect15boundingRectForERK6QRectF@Qt_6 6.1.2
@@ -5941,6 +5981,8 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZNK7QLayout18getContentsMarginsEPiS0_S0_S0_@Qt_6 6.1.2
  _ZNK7QLayout19expandingDirectionsEv@Qt_6 6.1.2
  _ZNK7QLayout19totalHeightForWidthEi@Qt_6 6.1.2
+ _ZNK7QLayout22verticalSizeConstraintEv@Qt_6 6.10.2
+ _ZNK7QLayout24horizontalSizeConstraintEv@Qt_6 6.10.2
  _ZNK7QLayout26totalMinimumHeightForWidthEi@Qt_6 6.1.2
  _ZNK7QLayout7indexOfEPK11QLayoutItem@Qt_6 6.1.2
  _ZNK7QLayout7indexOfEPK7QWidget@Qt_6 6.1.2
@@ -6055,6 +6097,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZNK7QWidget19graphicsProxyWidgetEv@Qt_6 6.1.2
  _ZNK7QWidget1xEv@Qt_6 6.1.2
  _ZNK7QWidget1yEv@Qt_6 6.1.2
+ _ZNK7QWidget20accessibleIdentifierEv@Qt_6 6.9.1
  _ZNK7QWidget20previousInFocusChainEv@Qt_6 6.1.2
  _ZNK7QWidget20testAttribute_helperEN2Qt15WidgetAttributeE@Qt_6 6.1.2
  _ZNK7QWidget21accessibleDescriptionEv@Qt_6 6.1.2
@@ -6072,7 +6115,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZNK7QWidget6windowEv@Qt_6 6.1.2
  _ZNK7QWidget7actionsEv@Qt_6 6.1.2
  _ZNK7QWidget7childAtERK6QPoint@Qt_6 6.1.2
- _ZNK7QWidget7childAtERK7QPointF@Qt_6 6.8.0
+ _ZNK7QWidget7childAtERK7QPointF@Qt_6 6.8.2
  _ZNK7QWidget7devTypeEv@Qt_6 6.1.2
  _ZNK7QWidget7mapFromEPKS_RK6QPoint@Qt_6 6.1.2
  _ZNK7QWidget7mapFromEPKS_RK7QPointF@Qt_6 6.1.2
@@ -6201,6 +6244,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZNK9QComboBox15placeholderTextEv@Qt_6 6.1.2
  _ZNK9QComboBox16inputMethodQueryEN2Qt16InputMethodQueryE@Qt_6 6.1.2
  _ZNK9QComboBox16inputMethodQueryEN2Qt16InputMethodQueryERK8QVariant@Qt_6 6.1.2
+ _ZNK9QComboBox16labelDrawingModeEv@Qt_6 6.9.1
  _ZNK9QComboBox16sizeAdjustPolicyEv@Qt_6 6.1.2
  _ZNK9QComboBox17duplicatesEnabledEv@Qt_6 6.1.2
  _ZNK9QComboBox21minimumContentsLengthEv@Qt_6 6.1.2
@@ -6395,11 +6439,10 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZNK9QUndoView5groupEv@Qt_6 6.1.2
  _ZNK9QUndoView5stackEv@Qt_6 6.1.2
  _ZNK9QUndoView9cleanIconEv@Qt_6 6.1.2
-#MISSING: 6.8.0# _ZSt19piecewise_construct@Qt_6 6.4.1
  _ZTI10QBoxLayout@Qt_6 6.1.2
  _ZTI10QCompleter@Qt_6 6.1.2
  _ZTI10QLCDNumber@Qt_6 6.1.2
- _ZTI10QRhiWidget@Qt_6 6.8.0
+ _ZTI10QRhiWidget@Qt_6 6.7.2
  _ZTI10QScrollBar@Qt_6 6.1.2
  _ZTI10QStatusBar@Qt_6 6.1.2
  _ZTI10QTabWidget@Qt_6 6.1.2
@@ -6491,6 +6534,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZTI18QItemEditorFactory@Qt_6 6.1.2
  _ZTI18QTapAndHoldGesture@Qt_6 6.1.2
  _ZTI19QAbstractScrollArea@Qt_6 6.1.2
+ _ZTI19QAccessibleWidgetV2@Qt_6 6.10.2
  _ZTI19QGraphicsBlurEffect@Qt_6 6.1.2
  _ZTI19QGraphicsGridLayout@Qt_6 6.1.2
  _ZTI19QGraphicsLayoutItem@Qt_6 6.1.2
@@ -6552,12 +6596,10 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZTI9QTreeView@Qt_6 6.1.2
  _ZTI9QUndoView@Qt_6 6.1.2
  _ZTIN5QTest25QTouchEventWidgetSequenceE@Qt_6 6.1.2
-#MISSING: 6.8.0# _ZTIZN9QMetaType17registerConverterI5QListI21QPersistentModelIndexE9QIterableI13QMetaSequenceEN9QtPrivate33QSequentialIterableConvertFunctorIS3_EEEEbT1_EUlPKvPvE_@Qt_6 6.1.2
  _ZTIZN9QMetaType17registerConverterI5QListI4QUrlE9QIterableI13QMetaSequenceEN9QtPrivate33QSequentialIterableConvertFunctorIS3_EEEEbT1_EUlPKvPvE_@Qt_6 6.1.2
  _ZTIZN9QMetaType17registerConverterI5QListI6QRectFE9QIterableI13QMetaSequenceEN9QtPrivate33QSequentialIterableConvertFunctorIS3_EEEEbT1_EUlPKvPvE_@Qt_6 6.1.2
  _ZTIZN9QMetaType17registerConverterI5QListIN2Qt3KeyEE9QIterableI13QMetaSequenceEN9QtPrivate33QSequentialIterableConvertFunctorIS4_EEEEbT1_EUlPKvPvE_@Qt_6 6.4.0
  _ZTIZN9QMetaType17registerConverterI5QListIiE9QIterableI13QMetaSequenceEN9QtPrivate33QSequentialIterableConvertFunctorIS2_EEEEbT1_EUlPKvPvE_@Qt_6 6.1.2
-#MISSING: 6.8.0# _ZTIZN9QMetaType19registerMutableViewI5QListI21QPersistentModelIndexE9QIterableI13QMetaSequenceEN9QtPrivate37QSequentialIterableMutableViewFunctorIS3_EEEEbT1_EUlPvSB_E_@Qt_6 6.1.2
  _ZTIZN9QMetaType19registerMutableViewI5QListI4QUrlE9QIterableI13QMetaSequenceEN9QtPrivate37QSequentialIterableMutableViewFunctorIS3_EEEEbT1_EUlPvSB_E_@Qt_6 6.1.2
  _ZTIZN9QMetaType19registerMutableViewI5QListI6QRectFE9QIterableI13QMetaSequenceEN9QtPrivate37QSequentialIterableMutableViewFunctorIS3_EEEEbT1_EUlPvSB_E_@Qt_6 6.1.2
  _ZTIZN9QMetaType19registerMutableViewI5QListIN2Qt3KeyEE9QIterableI13QMetaSequenceEN9QtPrivate37QSequentialIterableMutableViewFunctorIS4_EEEEbT1_EUlPvSC_E_@Qt_6 6.4.0
@@ -6565,7 +6607,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZTS10QBoxLayout@Qt_6 6.1.2
  _ZTS10QCompleter@Qt_6 6.1.2
  _ZTS10QLCDNumber@Qt_6 6.1.2
- _ZTS10QRhiWidget@Qt_6 6.8.0
+ _ZTS10QRhiWidget@Qt_6 6.7.2
  _ZTS10QScrollBar@Qt_6 6.1.2
  _ZTS10QStatusBar@Qt_6 6.1.2
  _ZTS10QTabWidget@Qt_6 6.1.2
@@ -6657,6 +6699,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZTS18QItemEditorFactory@Qt_6 6.1.2
  _ZTS18QTapAndHoldGesture@Qt_6 6.1.2
  _ZTS19QAbstractScrollArea@Qt_6 6.1.2
+ _ZTS19QAccessibleWidgetV2@Qt_6 6.10.2
  _ZTS19QGraphicsBlurEffect@Qt_6 6.1.2
  _ZTS19QGraphicsGridLayout@Qt_6 6.1.2
  _ZTS19QGraphicsLayoutItem@Qt_6 6.1.2
@@ -6718,12 +6761,10 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZTS9QTreeView@Qt_6 6.1.2
  _ZTS9QUndoView@Qt_6 6.1.2
  _ZTSN5QTest25QTouchEventWidgetSequenceE@Qt_6 6.1.2
-#MISSING: 6.8.0# _ZTSZN9QMetaType17registerConverterI5QListI21QPersistentModelIndexE9QIterableI13QMetaSequenceEN9QtPrivate33QSequentialIterableConvertFunctorIS3_EEEEbT1_EUlPKvPvE_@Qt_6 6.1.2
  _ZTSZN9QMetaType17registerConverterI5QListI4QUrlE9QIterableI13QMetaSequenceEN9QtPrivate33QSequentialIterableConvertFunctorIS3_EEEEbT1_EUlPKvPvE_@Qt_6 6.1.2
  _ZTSZN9QMetaType17registerConverterI5QListI6QRectFE9QIterableI13QMetaSequenceEN9QtPrivate33QSequentialIterableConvertFunctorIS3_EEEEbT1_EUlPKvPvE_@Qt_6 6.1.2
  _ZTSZN9QMetaType17registerConverterI5QListIN2Qt3KeyEE9QIterableI13QMetaSequenceEN9QtPrivate33QSequentialIterableConvertFunctorIS4_EEEEbT1_EUlPKvPvE_@Qt_6 6.4.0
  _ZTSZN9QMetaType17registerConverterI5QListIiE9QIterableI13QMetaSequenceEN9QtPrivate33QSequentialIterableConvertFunctorIS2_EEEEbT1_EUlPKvPvE_@Qt_6 6.1.2
-#MISSING: 6.8.0# _ZTSZN9QMetaType19registerMutableViewI5QListI21QPersistentModelIndexE9QIterableI13QMetaSequenceEN9QtPrivate37QSequentialIterableMutableViewFunctorIS3_EEEEbT1_EUlPvSB_E_@Qt_6 6.1.2
  _ZTSZN9QMetaType19registerMutableViewI5QListI4QUrlE9QIterableI13QMetaSequenceEN9QtPrivate37QSequentialIterableMutableViewFunctorIS3_EEEEbT1_EUlPvSB_E_@Qt_6 6.1.2
  _ZTSZN9QMetaType19registerMutableViewI5QListI6QRectFE9QIterableI13QMetaSequenceEN9QtPrivate37QSequentialIterableMutableViewFunctorIS3_EEEEbT1_EUlPvSB_E_@Qt_6 6.1.2
  _ZTSZN9QMetaType19registerMutableViewI5QListIN2Qt3KeyEE9QIterableI13QMetaSequenceEN9QtPrivate37QSequentialIterableMutableViewFunctorIS4_EEEEbT1_EUlPvSC_E_@Qt_6 6.4.0
@@ -6731,7 +6772,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZTV10QBoxLayout@Qt_6 6.1.2
  _ZTV10QCompleter@Qt_6 6.1.2
  _ZTV10QLCDNumber@Qt_6 6.1.2
- _ZTV10QRhiWidget@Qt_6 6.8.0
+ _ZTV10QRhiWidget@Qt_6 6.7.2
  _ZTV10QScrollBar@Qt_6 6.1.2
  _ZTV10QStatusBar@Qt_6 6.1.2
  _ZTV10QTabWidget@Qt_6 6.1.2
@@ -6823,6 +6864,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZTV18QItemEditorFactory@Qt_6 6.1.2
  _ZTV18QTapAndHoldGesture@Qt_6 6.1.2
  _ZTV19QAbstractScrollArea@Qt_6 6.1.2
+ _ZTV19QAccessibleWidgetV2@Qt_6 6.10.2
  _ZTV19QGraphicsBlurEffect@Qt_6 6.1.2
  _ZTV19QGraphicsGridLayout@Qt_6 6.1.2
  _ZTV19QGraphicsLayoutItem@Qt_6 6.1.2
@@ -6883,12 +6925,10 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZTV9QTreeView@Qt_6 6.1.2
  _ZTV9QUndoView@Qt_6 6.1.2
  _ZTVN5QTest25QTouchEventWidgetSequenceE@Qt_6 6.1.2
-#MISSING: 6.8.0# (optional=templinst)_ZZN9QMetaType21registerConverterImplI5QListI21QPersistentModelIndexE9QIterableI13QMetaSequenceEEEbSt8functionIFbPKvPvEES_S_E10unregister@Qt_6 6.2.0
  (optional=templinst)_ZZN9QMetaType21registerConverterImplI5QListI4QUrlE9QIterableI13QMetaSequenceEEEbSt8functionIFbPKvPvEES_S_E10unregister@Qt_6 6.2.0
  (optional=templinst)_ZZN9QMetaType21registerConverterImplI5QListI6QRectFE9QIterableI13QMetaSequenceEEEbSt8functionIFbPKvPvEES_S_E10unregister@Qt_6 6.2.0
  (optional=templinst)_ZZN9QMetaType21registerConverterImplI5QListIN2Qt3KeyEE9QIterableI13QMetaSequenceEEEbSt8functionIFbPKvPvEES_S_E10unregister@Qt_6 6.4.0
  (optional=templinst)_ZZN9QMetaType21registerConverterImplI5QListIiE9QIterableI13QMetaSequenceEEEbSt8functionIFbPKvPvEES_S_E10unregister@Qt_6 6.2.0
-#MISSING: 6.8.0# (optional=templinst)_ZZN9QMetaType23registerMutableViewImplI5QListI21QPersistentModelIndexE9QIterableI13QMetaSequenceEEEbSt8functionIFbPvS8_EES_S_E10unregister@Qt_6 6.2.0
  (optional=templinst)_ZZN9QMetaType23registerMutableViewImplI5QListI4QUrlE9QIterableI13QMetaSequenceEEEbSt8functionIFbPvS8_EES_S_E10unregister@Qt_6 6.2.0
  (optional=templinst)_ZZN9QMetaType23registerMutableViewImplI5QListI6QRectFE9QIterableI13QMetaSequenceEEEbSt8functionIFbPvS8_EES_S_E10unregister@Qt_6 6.2.0
  (optional=templinst)_ZZN9QMetaType23registerMutableViewImplI5QListIN2Qt3KeyEE9QIterableI13QMetaSequenceEEEbSt8functionIFbPvS9_EES_S_E10unregister@Qt_6 6.4.0
@@ -6896,14 +6936,13 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _Zls6QDebug6QFlagsIN13QGraphicsItem16GraphicsItemFlagEE@Qt_6 6.1.2
  _Zls6QDebugN13QGraphicsItem16GraphicsItemFlagE@Qt_6 6.1.2
  _Zls6QDebugN13QGraphicsItem18GraphicsItemChangeE@Qt_6 6.1.2
- _Zls6QDebugPK11QDockWidget@Qt_6 6.6.1
+ _Zls6QDebugPK11QDockWidget@Qt_6 6.7.2
  _Zls6QDebugPK13QGestureEvent@Qt_6 6.1.2
  _Zls6QDebugPK13QGraphicsItem@Qt_6 6.1.2
  _Zls6QDebugPK15QGraphicsObject@Qt_6 6.1.2
  _Zls6QDebugPK19QGraphicsSceneEvent@Qt_6 6.1.2
  _Zls6QDebugPK7QWidget@Qt_6 6.1.2
  _Zls6QDebugPK8QGesture@Qt_6 6.1.2
-#MISSING: 6.8.0# _Zls6QDebugRK11QDockWidget@Qt_6 6.6.1
  _Zls6QDebugRK11QSizePolicy@Qt_6 6.1.2
  _Zls6QDebugRK12QStyleOption@Qt_6 6.1.2
  _Zls6QDebugRKN12QStyleOption10OptionTypeE@Qt_6 6.1.2
@@ -6924,6 +6963,9 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  (c++)"non-virtual thunk to QAccessibleWidget::doAction(QString const&)@Qt_6" 6.1.2
  (c++)"non-virtual thunk to QAccessibleWidget::keyBindingsForAction(QString const&) const@Qt_6" 6.1.2
  (c++)"non-virtual thunk to QAccessibleWidget::~QAccessibleWidget()@Qt_6" 6.1.2
+ (c++)"non-virtual thunk to QAccessibleWidgetV2::attributeKeys() const@Qt_6" 6.10.2
+ (c++)"non-virtual thunk to QAccessibleWidgetV2::attributeValue(QAccessible::Attribute) const@Qt_6" 6.10.2
+ (c++)"non-virtual thunk to QAccessibleWidgetV2::~QAccessibleWidgetV2()@Qt_6" 6.10.2
  (c++)"non-virtual thunk to QBoxLayout::expandingDirections() const@Qt_6" 6.1.2
  (c++)"non-virtual thunk to QBoxLayout::hasHeightForWidth() const@Qt_6" 6.1.2
  (c++)"non-virtual thunk to QBoxLayout::heightForWidth(int) const@Qt_6" 6.1.2
@@ -7074,7 +7116,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  (c++)"non-virtual thunk to QProgressDialog::~QProgressDialog()@Qt_6" 6.1.2
  (c++)"non-virtual thunk to QPushButton::~QPushButton()@Qt_6" 6.1.2
  (c++)"non-virtual thunk to QRadioButton::~QRadioButton()@Qt_6" 6.1.2
- (c++)"non-virtual thunk to QRhiWidget::~QRhiWidget()@Qt_6" 6.8.0
+ (c++)"non-virtual thunk to QRhiWidget::~QRhiWidget()@Qt_6" 6.7.2
  (c++)"non-virtual thunk to QRubberBand::~QRubberBand()@Qt_6" 6.1.2
  (c++)"non-virtual thunk to QScrollArea::~QScrollArea()@Qt_6" 6.1.2
  (c++)"non-virtual thunk to QScrollBar::~QScrollBar()@Qt_6" 6.1.2

@@ -3,6 +3,7 @@
 
 #include "qvulkanwindow_p.h"
 #include "qvulkanfunctions.h"
+#include "qvulkandefaultinstance_p.h"
 #include <QLoggingCategory>
 #include <QTimer>
 #include <QThread>
@@ -10,8 +11,6 @@
 #include <qevent.h>
 
 QT_BEGIN_NAMESPACE
-
-Q_DECLARE_LOGGING_CATEGORY(lcGuiVk)
 
 /*!
   \class QVulkanWindow
@@ -682,12 +681,12 @@ void QVulkanWindowPrivate::init()
     QByteArray envExts = qgetenv("QT_VULKAN_DEVICE_EXTENSIONS");
     if (!envExts.isEmpty()) {
         QByteArrayList envExtList =  envExts.split(';');
-        for (auto ext : reqExts)
+        for (const QByteArray &ext : std::as_const(reqExts))
             envExtList.removeAll(ext);
         reqExts.append(envExtList);
     }
 
-    for (const QByteArray &ext : reqExts) {
+    for (const QByteArray &ext : std::as_const(reqExts)) {
         if (supportedExtensions.contains(ext))
             devExts.append(ext.constData());
     }
@@ -718,6 +717,9 @@ void QVulkanWindowPrivate::init()
         devInfo.pEnabledFeatures = &features;
     }
 
+    const QByteArray stdValName = QByteArrayLiteral("VK_LAYER_KHRONOS_validation");
+    const char *stdValNamePtr = stdValName.constData();
+
     // Device layers are not supported by QVulkanWindow since that's an already deprecated
     // API. However, have a workaround for systems with older API and layers (f.ex. L4T
     // 24.2 for the Jetson TX1 provides API 1.0.13 and crashes when the validation layer
@@ -728,8 +730,6 @@ void QVulkanWindowPrivate::init()
         && VK_VERSION_PATCH(apiVersion) <= 13)
     {
         // Make standard validation work at least.
-        const QByteArray stdValName = QByteArrayLiteral("VK_LAYER_KHRONOS_validation");
-        const char *stdValNamePtr = stdValName.constData();
         if (inst->layers().contains(stdValName)) {
             uint32_t count = 0;
             VkResult err = f->vkEnumerateDeviceLayerProperties(physDev, &count, nullptr);
@@ -871,6 +871,19 @@ void QVulkanWindowPrivate::init()
             }
         }
     }
+
+#if QT_CONFIG(wayland)
+    // On Wayland, only one color management surface can be created at a time without
+    // triggering a protocol error, and we create one ourselves in some situations.
+    // To avoid this problem, use VK_COLOR_SPACE_PASS_THROUGH_EXT when supported,
+    // so that the driver doesn't create a color management surface as well.
+    const bool hasPassthrough = std::any_of(formats.cbegin(), formats.cend(), [this](const VkSurfaceFormatKHR &format) {
+        return format.format == colorFormat && format.colorSpace == VK_COLOR_SPACE_PASS_THROUGH_EXT;
+    });
+    if (hasPassthrough) {
+        colorSpace = VK_COLOR_SPACE_PASS_THROUGH_EXT;
+    }
+#endif
 
     const VkFormat dsFormatCandidates[] = {
         VK_FORMAT_D24_UNORM_S8_UINT,
@@ -1197,13 +1210,6 @@ void QVulkanWindowPrivate::recreateSwapChain()
             return;
         }
 
-        err = devFuncs->vkCreateFence(dev, &fenceInfo, nullptr, &image.cmdFence);
-        if (err != VK_SUCCESS) {
-            qWarning("QVulkanWindow: Failed to create command buffer fence: %d", err);
-            return;
-        }
-        image.cmdFenceWaitable = true; // fence was created in signaled state
-
         VkImageView views[3] = { image.imageView,
                                  dsView,
                                  msaa ? image.msaaImageView : VK_NULL_HANDLE };
@@ -1271,13 +1277,17 @@ void QVulkanWindowPrivate::recreateSwapChain()
         frame.imageAcquired = false;
         frame.imageSemWaitable = false;
 
-        devFuncs->vkCreateFence(dev, &fenceInfo, nullptr, &frame.fence);
-        frame.fenceWaitable = true; // fence was created in signaled state
-
         devFuncs->vkCreateSemaphore(dev, &semInfo, nullptr, &frame.imageSem);
         devFuncs->vkCreateSemaphore(dev, &semInfo, nullptr, &frame.drawSem);
         if (gfxQueueFamilyIdx != presQueueFamilyIdx)
             devFuncs->vkCreateSemaphore(dev, &semInfo, nullptr, &frame.presTransSem);
+
+        err = devFuncs->vkCreateFence(dev, &fenceInfo, nullptr, &frame.cmdFence);
+        if (err != VK_SUCCESS) {
+            qWarning("QVulkanWindow: Failed to create command buffer fence: %d", err);
+            return;
+        }
+        frame.cmdFenceWaitable = true; // fence was created in signaled state
     }
 
     currentFrame = 0;
@@ -1433,12 +1443,9 @@ void QVulkanWindowPrivate::releaseSwapChain()
 
     for (int i = 0; i < frameLag; ++i) {
         FrameResources &frame(frameRes[i]);
-        if (frame.fence) {
-            if (frame.fenceWaitable)
-                devFuncs->vkWaitForFences(dev, 1, &frame.fence, VK_TRUE, UINT64_MAX);
-            devFuncs->vkDestroyFence(dev, frame.fence, nullptr);
-            frame.fence = VK_NULL_HANDLE;
-            frame.fenceWaitable = false;
+        if (frame.cmdBuf) {
+            devFuncs->vkFreeCommandBuffers(dev, cmdPool, 1, &frame.cmdBuf);
+            frame.cmdBuf = VK_NULL_HANDLE;
         }
         if (frame.imageSem) {
             devFuncs->vkDestroySemaphore(dev, frame.imageSem, nullptr);
@@ -1452,17 +1459,17 @@ void QVulkanWindowPrivate::releaseSwapChain()
             devFuncs->vkDestroySemaphore(dev, frame.presTransSem, nullptr);
             frame.presTransSem = VK_NULL_HANDLE;
         }
+        if (frame.cmdFence) {
+            if (frame.cmdFenceWaitable)
+                devFuncs->vkWaitForFences(dev, 1, &frame.cmdFence, VK_TRUE, UINT64_MAX);
+            devFuncs->vkDestroyFence(dev, frame.cmdFence, nullptr);
+            frame.cmdFence = VK_NULL_HANDLE;
+            frame.cmdFenceWaitable = false;
+        }
     }
 
     for (int i = 0; i < swapChainBufferCount; ++i) {
         ImageResources &image(imageRes[i]);
-        if (image.cmdFence) {
-            if (image.cmdFenceWaitable)
-                devFuncs->vkWaitForFences(dev, 1, &image.cmdFence, VK_TRUE, UINT64_MAX);
-            devFuncs->vkDestroyFence(dev, image.cmdFence, nullptr);
-            image.cmdFence = VK_NULL_HANDLE;
-            image.cmdFenceWaitable = false;
-        }
         if (image.fb) {
             devFuncs->vkDestroyFramebuffer(dev, image.fb, nullptr);
             image.fb = VK_NULL_HANDLE;
@@ -1470,10 +1477,6 @@ void QVulkanWindowPrivate::releaseSwapChain()
         if (image.imageView) {
             devFuncs->vkDestroyImageView(dev, image.imageView, nullptr);
             image.imageView = VK_NULL_HANDLE;
-        }
-        if (image.cmdBuf) {
-            devFuncs->vkFreeCommandBuffers(dev, cmdPool, 1, &image.cmdBuf);
-            image.cmdBuf = VK_NULL_HANDLE;
         }
         if (image.presTransCmdBuf) {
             devFuncs->vkFreeCommandBuffers(dev, presCmdPool, 1, &image.presTransCmdBuf);
@@ -1563,6 +1566,7 @@ bool QVulkanWindow::event(QEvent *e)
     Q_D(QVulkanWindow);
 
     switch (e->type()) {
+    case QEvent::Paint:
     case QEvent::UpdateRequest:
         d->beginFrame();
         break;
@@ -1921,24 +1925,21 @@ void QVulkanWindowPrivate::beginFrame()
             return;
     }
 
+    // wait if we are too far ahead
     FrameResources &frame(frameRes[currentFrame]);
+    if (frame.cmdFenceWaitable) {
+        devFuncs->vkWaitForFences(dev, 1, &frame.cmdFence, VK_TRUE, UINT64_MAX);
+        devFuncs->vkResetFences(dev, 1, &frame.cmdFence);
+        frame.cmdFenceWaitable = false;
+    }
 
+    // move on to next swapchain image
     if (!frame.imageAcquired) {
-        // Wait if we are too far ahead, i.e. the thread gets throttled based on the presentation rate
-        // (note that we are using FIFO mode -> vsync)
-        if (frame.fenceWaitable) {
-            devFuncs->vkWaitForFences(dev, 1, &frame.fence, VK_TRUE, UINT64_MAX);
-            devFuncs->vkResetFences(dev, 1, &frame.fence);
-            frame.fenceWaitable = false;
-        }
-
-        // move on to next swapchain image
         VkResult err = vkAcquireNextImageKHR(dev, swapChain, UINT64_MAX,
-                                             frame.imageSem, frame.fence, &currentImage);
+                                             frame.imageSem, VK_NULL_HANDLE, &currentImage);
         if (err == VK_SUCCESS || err == VK_SUBOPTIMAL_KHR) {
             frame.imageSemWaitable = true;
             frame.imageAcquired = true;
-            frame.fenceWaitable = true;
         } else if (err == VK_ERROR_OUT_OF_DATE_KHR) {
             recreateSwapChain();
             q->requestUpdate();
@@ -1951,23 +1952,15 @@ void QVulkanWindowPrivate::beginFrame()
         }
     }
 
-    // make sure the previous draw for the same image has finished
-    ImageResources &image(imageRes[currentImage]);
-    if (image.cmdFenceWaitable) {
-        devFuncs->vkWaitForFences(dev, 1, &image.cmdFence, VK_TRUE, UINT64_MAX);
-        devFuncs->vkResetFences(dev, 1, &image.cmdFence);
-        image.cmdFenceWaitable = false;
-    }
-
     // build new draw command buffer
-    if (image.cmdBuf) {
-        devFuncs->vkFreeCommandBuffers(dev, cmdPool, 1, &image.cmdBuf);
-        image.cmdBuf = nullptr;
+    if (frame.cmdBuf) {
+        devFuncs->vkFreeCommandBuffers(dev, cmdPool, 1, &frame.cmdBuf);
+        frame.cmdBuf = nullptr;
     }
 
     VkCommandBufferAllocateInfo cmdBufInfo = {
         VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO, nullptr, cmdPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1 };
-    VkResult err = devFuncs->vkAllocateCommandBuffers(dev, &cmdBufInfo, &image.cmdBuf);
+    VkResult err = devFuncs->vkAllocateCommandBuffers(dev, &cmdBufInfo, &frame.cmdBuf);
     if (err != VK_SUCCESS) {
         if (!checkDeviceLost(err))
             qWarning("QVulkanWindow: Failed to allocate frame command buffer: %d", err);
@@ -1976,7 +1969,7 @@ void QVulkanWindowPrivate::beginFrame()
 
     VkCommandBufferBeginInfo cmdBufBeginInfo = {
         VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, nullptr, 0, nullptr };
-    err = devFuncs->vkBeginCommandBuffer(image.cmdBuf, &cmdBufBeginInfo);
+    err = devFuncs->vkBeginCommandBuffer(frame.cmdBuf, &cmdBufBeginInfo);
     if (err != VK_SUCCESS) {
         if (!checkDeviceLost(err))
             qWarning("QVulkanWindow: Failed to begin frame command buffer: %d", err);
@@ -1986,6 +1979,7 @@ void QVulkanWindowPrivate::beginFrame()
     if (frameGrabbing)
         frameGrabTargetImage = QImage(swapChainImageSize, QImage::Format_RGBA8888); // the format is as documented
 
+    ImageResources &image(imageRes[currentImage]);
     if (renderer) {
         framePending = true;
         renderer->startNextFrame();
@@ -2007,8 +2001,8 @@ void QVulkanWindowPrivate::beginFrame()
         rpBeginInfo.renderArea.extent.height = swapChainImageSize.height();
         rpBeginInfo.clearValueCount = sampleCount > VK_SAMPLE_COUNT_1_BIT ? 3 : 2;
         rpBeginInfo.pClearValues = clearValues;
-        devFuncs->vkCmdBeginRenderPass(image.cmdBuf, &rpBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-        devFuncs->vkCmdEndRenderPass(image.cmdBuf);
+        devFuncs->vkCmdBeginRenderPass(frame.cmdBuf, &rpBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+        devFuncs->vkCmdEndRenderPass(frame.cmdBuf);
 
         endFrame();
     }
@@ -2034,7 +2028,7 @@ void QVulkanWindowPrivate::endFrame()
         presTrans.image = image.image;
         presTrans.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         presTrans.subresourceRange.levelCount = presTrans.subresourceRange.layerCount = 1;
-        devFuncs->vkCmdPipelineBarrier(image.cmdBuf,
+        devFuncs->vkCmdPipelineBarrier(frame.cmdBuf,
                                        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                                        VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                                        0, 0, nullptr, 0, nullptr,
@@ -2045,7 +2039,7 @@ void QVulkanWindowPrivate::endFrame()
     if (frameGrabbing)
         addReadback();
 
-    VkResult err = devFuncs->vkEndCommandBuffer(image.cmdBuf);
+    VkResult err = devFuncs->vkEndCommandBuffer(frame.cmdBuf);
     if (err != VK_SUCCESS) {
         if (!checkDeviceLost(err))
             qWarning("QVulkanWindow: Failed to end frame command buffer: %d", err);
@@ -2057,7 +2051,7 @@ void QVulkanWindowPrivate::endFrame()
     memset(&submitInfo, 0, sizeof(submitInfo));
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &image.cmdBuf;
+    submitInfo.pCommandBuffers = &frame.cmdBuf;
     if (frame.imageSemWaitable) {
         submitInfo.waitSemaphoreCount = 1;
         submitInfo.pWaitSemaphores = &frame.imageSem;
@@ -2069,12 +2063,12 @@ void QVulkanWindowPrivate::endFrame()
     VkPipelineStageFlags psf = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     submitInfo.pWaitDstStageMask = &psf;
 
-    Q_ASSERT(!image.cmdFenceWaitable);
+    Q_ASSERT(!frame.cmdFenceWaitable);
 
-    err = devFuncs->vkQueueSubmit(gfxQueue, 1, &submitInfo, image.cmdFence);
+    err = devFuncs->vkQueueSubmit(gfxQueue, 1, &submitInfo, frame.cmdFence);
     if (err == VK_SUCCESS) {
         frame.imageSemWaitable = false;
-        image.cmdFenceWaitable = true;
+        frame.cmdFenceWaitable = true;
     } else {
         if (!checkDeviceLost(err))
             qWarning("QVulkanWindow: Failed to submit to graphics queue: %d", err);
@@ -2153,7 +2147,7 @@ void QVulkanWindowPrivate::endFrame()
  */
 void QVulkanWindow::frameReady()
 {
-    Q_ASSERT_X(QThread::currentThread() == QCoreApplication::instance()->thread(),
+    Q_ASSERT_X(QThread::isMainThread(),
         "QVulkanWindow", "frameReady() can only be called from the GUI (main) thread");
 
     Q_D(QVulkanWindow);
@@ -2229,6 +2223,7 @@ void QVulkanWindowPrivate::addReadback()
         return;
     }
 
+    FrameResources &frame(frameRes[currentFrame]);
     ImageResources &image(imageRes[currentImage]);
 
     VkImageMemoryBarrier barrier;
@@ -2243,7 +2238,7 @@ void QVulkanWindowPrivate::addReadback()
     barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
     barrier.image = image.image;
 
-    devFuncs->vkCmdPipelineBarrier(image.cmdBuf,
+    devFuncs->vkCmdPipelineBarrier(frame.cmdBuf,
                                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                                    VK_PIPELINE_STAGE_TRANSFER_BIT,
                                    0, 0, nullptr, 0, nullptr,
@@ -2255,7 +2250,7 @@ void QVulkanWindowPrivate::addReadback()
     barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     barrier.image = frameGrabImage;
 
-    devFuncs->vkCmdPipelineBarrier(image.cmdBuf,
+    devFuncs->vkCmdPipelineBarrier(frame.cmdBuf,
                                    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                                    VK_PIPELINE_STAGE_TRANSFER_BIT,
                                    0, 0, nullptr, 0, nullptr,
@@ -2269,7 +2264,7 @@ void QVulkanWindowPrivate::addReadback()
     copyInfo.extent.height = frameGrabTargetImage.height();
     copyInfo.extent.depth = 1;
 
-    devFuncs->vkCmdCopyImage(image.cmdBuf, image.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+    devFuncs->vkCmdCopyImage(frame.cmdBuf, image.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                              frameGrabImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyInfo);
 
     barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
@@ -2278,7 +2273,7 @@ void QVulkanWindowPrivate::addReadback()
     barrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
     barrier.image = frameGrabImage;
 
-    devFuncs->vkCmdPipelineBarrier(image.cmdBuf,
+    devFuncs->vkCmdPipelineBarrier(frame.cmdBuf,
                                    VK_PIPELINE_STAGE_TRANSFER_BIT,
                                    VK_PIPELINE_STAGE_HOST_BIT,
                                    0, 0, nullptr, 0, nullptr,
@@ -2287,14 +2282,14 @@ void QVulkanWindowPrivate::addReadback()
 
 void QVulkanWindowPrivate::finishBlockingReadback()
 {
-    ImageResources &image(imageRes[currentImage]);
-
     // Block until the current frame is done. Normally this wait would only be
     // done in current + concurrentFrameCount().
-    devFuncs->vkWaitForFences(dev, 1, &image.cmdFence, VK_TRUE, UINT64_MAX);
-    devFuncs->vkResetFences(dev, 1, &image.cmdFence);
-    // will reuse the same image for the next "real" frame, do not wait then
-    image.cmdFenceWaitable = false;
+    FrameResources &frame(frameRes[currentFrame]);
+    if (frame.cmdFenceWaitable) {
+        devFuncs->vkWaitForFences(dev, 1, &frame.cmdFence, VK_TRUE, UINT64_MAX);
+        devFuncs->vkResetFences(dev, 1, &frame.cmdFence);
+        frame.cmdFenceWaitable = false;
+    }
 
     VkImageSubresource subres = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0 };
     VkSubresourceLayout layout;
@@ -2524,7 +2519,7 @@ QSize QVulkanWindow::swapChainImageSize() const
 }
 
 /*!
-    Returns The active command buffer for the current swap chain image.
+    Returns The active command buffer for the current swap chain frame.
     Implementations of QVulkanWindowRenderer::startNextFrame() are expected to
     add commands to this command buffer.
 
@@ -2538,7 +2533,7 @@ VkCommandBuffer QVulkanWindow::currentCommandBuffer() const
         qWarning("QVulkanWindow: Attempted to call currentCommandBuffer() without an active frame");
         return VK_NULL_HANDLE;
     }
-    return d->imageRes[d->currentImage].cmdBuf;
+    return d->frameRes[d->currentFrame].cmdBuf;
 }
 
 /*!

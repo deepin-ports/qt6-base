@@ -31,7 +31,7 @@ QT_BEGIN_NAMESPACE
 
 class QPaintEngine;
 
-extern const char  *qt_mfhdr_tag;
+extern const char *const qt_mfhdr_tag;
 
 class QPicturePrivate
 {
@@ -113,6 +113,7 @@ public:
     bool checkFormat();
     void resetFormat();
 
+    QByteArray pictbData;
     QBuffer pictb;
     int trecs;
     bool formatOk;

@@ -1,8 +1,12 @@
-Index: qt6-base/src/widgets/itemviews/qlistview.cpp
-===================================================================
---- qt6-base.orig/src/widgets/itemviews/qlistview.cpp
-+++ qt6-base/src/widgets/itemviews/qlistview.cpp
-@@ -758,9 +758,7 @@ void QListView::mousePressEvent(QMouseEv
+
+
+Refreshed for Debian forky Qt 6.11.2.
+
+diff --git a/src/widgets/itemviews/qlistview.cpp b/src/widgets/itemviews/qlistview.cpp
+index 3f55e32a..4b50ec8e 100644
+--- a/src/widgets/itemviews/qlistview.cpp
++++ b/src/widgets/itemviews/qlistview.cpp
+@@ -763,9 +763,7 @@ void QListView::mousePressEvent(QMouseEvent *e)
                  QScroller::scroller(this)->deleteLater();
              }
  
@@ -13,7 +17,7 @@ Index: qt6-base/src/widgets/itemviews/qlistview.cpp
          }
      } else {
          if (QScroller::hasScroller(this)) {
-@@ -783,7 +781,12 @@ void QListView::mouseMoveEvent(QMouseEve
+@@ -788,7 +786,12 @@ void QListView::mouseMoveEvent(QMouseEvent *e)
              return;
          }
  
@@ -27,7 +31,7 @@ Index: qt6-base/src/widgets/itemviews/qlistview.cpp
  
              this->setVerticalScrollMode(ScrollPerPixel);
              this->setHorizontalScrollMode(ScrollPerPixel);
-@@ -801,9 +804,6 @@ void QListView::mouseMoveEvent(QMouseEve
+@@ -806,9 +809,6 @@ void QListView::mouseMoveEvent(QMouseEvent *e)
              scroller->handleInput(QScroller::InputPress, e->localPos(), static_cast<qint64>(e->timestamp()));
              scroller->handleInput(QScroller::InputMove, e->localPos(), static_cast<qint64>(e->timestamp()));
              return;
@@ -37,7 +41,7 @@ Index: qt6-base/src/widgets/itemviews/qlistview.cpp
          }
  
      } else {
-@@ -1819,6 +1819,10 @@ Qt::Alignment QListView::itemAlignment()
+@@ -1805,6 +1805,10 @@ Qt::Alignment QListView::itemAlignment() const
  */
  bool QListView::event(QEvent *e)
  {
@@ -48,7 +52,7 @@ Index: qt6-base/src/widgets/itemviews/qlistview.cpp
      return QAbstractItemView::event(e);
  }
  
-@@ -1828,7 +1832,7 @@ bool QListView::eventFilter(QObject *obj
+@@ -1814,7 +1818,7 @@ bool QListView::eventFilter(QObject *obj, QEvent *e)
      if ((obj == horizontalScrollBar() || obj == verticalScrollBar()) && (e->type() == QEvent::MouseButtonPress || e->type() == QEvent::MouseMove)) {
  
          QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(e);

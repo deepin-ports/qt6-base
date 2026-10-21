@@ -1,5 +1,6 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #ifndef QFILESYSTEMITERATOR_P_H
 #define QFILESYSTEMITERATOR_P_H
@@ -24,10 +25,6 @@
 
 #include <QtCore/private/qfilesystementry_p.h>
 #include <QtCore/private/qfilesystemmetadata_p.h>
-
-#if !defined(Q_OS_WIN)
-#include <private/qstringconverter_p.h>
-#endif
 
 #include <memory>
 
@@ -63,7 +60,6 @@ private:
 
     QT_DIRENT *dirEntry = nullptr;
     int lastError = 0;
-    QStringDecoder toUtf16;
 #endif
 
     Q_DISABLE_COPY_MOVE(QFileSystemIterator)

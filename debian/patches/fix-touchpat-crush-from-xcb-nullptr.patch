@@ -1,8 +1,12 @@
-Index: qt6-base/src/plugins/platforms/xcb/qxcbconnection_xi2.cpp
-===================================================================
---- qt6-base.orig/src/plugins/platforms/xcb/qxcbconnection_xi2.cpp
-+++ qt6-base/src/plugins/platforms/xcb/qxcbconnection_xi2.cpp
-@@ -1143,6 +1143,12 @@ void QXcbConnection::xi2HandleGesturePin
+
+
+Refreshed for Debian forky Qt 6.11.2.
+
+diff --git a/src/plugins/platforms/xcb/qxcbconnection_xi2.cpp b/src/plugins/platforms/xcb/qxcbconnection_xi2.cpp
+index 564aa086..3241e557 100644
+--- a/src/plugins/platforms/xcb/qxcbconnection_xi2.cpp
++++ b/src/plugins/platforms/xcb/qxcbconnection_xi2.cpp
+@@ -1142,6 +1142,12 @@ void QXcbConnection::xi2HandleGesturePinchEvent(void *event)
      setTime(xiEvent->time);
  
      TouchDeviceData *dev = touchDeviceForId(xiEvent->sourceid);
@@ -15,7 +19,7 @@ Index: qt6-base/src/plugins/platforms/xcb/qxcbconnection_xi2.cpp
      Q_ASSERT(dev);
  
      uint32_t fingerCount = xiEvent->detail;
-@@ -1230,6 +1236,12 @@ void QXcbConnection::xi2HandleGestureSwi
+@@ -1229,6 +1235,12 @@ void QXcbConnection::xi2HandleGestureSwipeEvent(void *event)
      setTime(xiEvent->time);
  
      TouchDeviceData *dev = touchDeviceForId(xiEvent->sourceid);

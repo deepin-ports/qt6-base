@@ -85,6 +85,7 @@ private slots:
 
     void cursorPositionChanged();
     void cursorPositionChangedOnSetText();
+    void cursorPositionChangedOnClear();
 
     void textFrameIterator();
 
@@ -295,6 +296,8 @@ void tst_QTextDocument::cleanup()
     cursor = QTextCursor();
     delete doc;
     doc = 0;
+
+    QTextDocument::setDefaultResourceProvider({});
 }
 
 void tst_QTextDocument::cleanupTestCase()
@@ -2250,6 +2253,23 @@ void tst_QTextDocument::cursorPositionChangedOnSetText()
     doc->setHtml("<p>Foo<p>Bar<p>Baz<p>Blah");
 
     QCOMPARE(spy.calls, 1);
+}
+
+void tst_QTextDocument::cursorPositionChangedOnClear()
+{
+    cursor.insertText("Hello World");
+    QVERIFY(cursor.position() > 0);
+
+    CursorPosSignalSpy spy(doc);
+    doc->clear();
+
+    // cursor was not at position 0, so signal must be emitted
+    QCOMPARE(spy.calls, 1);
+
+    // clearing again with cursor already at 0 should not emit
+    spy.calls = 0;
+    doc->clear();
+    QCOMPARE(spy.calls, 0);
 }
 
 void tst_QTextDocument::textFrameIterator()

@@ -1,5 +1,6 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #ifndef QNETWORKACCESSCACHE_P_H
 #define QNETWORKACCESSCACHE_P_H
@@ -68,9 +69,6 @@ public:
     void releaseEntry(const QByteArray &key);
     void removeEntry(const QByteArray &key);
 
-signals:
-    void entryReady(QNetworkAccessCache::CacheableObject *);
-
 protected:
     void timerEvent(QTimerEvent *) override;
 
@@ -85,7 +83,6 @@ private:
     void linkEntry(const QByteArray &key);
     bool unlinkEntry(const QByteArray &key);
     void updateTimer();
-    bool emitEntryReady(Node *node, QObject *target, const char *member);
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS(QNetworkAccessCache::CacheableObject::Options)

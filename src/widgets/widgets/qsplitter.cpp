@@ -1,5 +1,6 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #include "qsplitter.h"
 
@@ -19,7 +20,6 @@
 #include "qvarlengtharray.h"
 #include "private/qlayoutengine_p.h"
 #include "private/qsplitter_p.h"
-#include "qtimer.h"
 #include "qdebug.h"
 
 #include <ctype.h>
@@ -258,7 +258,7 @@ void QSplitterHandle::mouseMoveEvent(QMouseEvent *e)
     if (!d->pressed)
         return;
 
-    const int pos = d->pick(parentWidget()->mapFromGlobal(e->globalPosition().toPoint()))
+    const int pos = d->pick(parentWidget()->mapFromGlobal(e->globalPosition()).toPoint())
                     - d->mouseOffset;
     if (opaqueResize()) {
         moveSplitter(pos);
@@ -290,7 +290,7 @@ void QSplitterHandle::mouseReleaseEvent(QMouseEvent *e)
         return;
 
     if (!opaqueResize()) {
-        const int pos = d->pick(parentWidget()->mapFromGlobal(e->globalPosition().toPoint()))
+        const int pos = d->pick(parentWidget()->mapFromGlobal(e->globalPosition()).toPoint())
                         - d->mouseOffset;
         d->s->setRubberBand(-1);
         moveSplitter(pos);
@@ -806,7 +806,7 @@ QSplitterLayoutStruct *QSplitterPrivate::findWidget(QWidget *w) const
 void QSplitterPrivate::insertWidget_helper(int index, QWidget *widget, bool show)
 {
     Q_Q(QSplitter);
-    QBoolBlocker b(blockChildAdd);
+    QScopedValueRollback b(blockChildAdd, true);
     const bool needShow = show && shouldShowWidget(widget);
     if (widget->parentWidget() != q)
         widget->setParent(q);
@@ -1146,7 +1146,7 @@ QWidget *QSplitter::replaceWidget(int index, QWidget *widget)
         return nullptr;
     }
 
-    QBoolBlocker b(d->blockChildAdd);
+    QScopedValueRollback b(d->blockChildAdd, true);
 
     const QRect geom = current->geometry();
     const bool wasHidden = current->isHidden();
@@ -1311,7 +1311,7 @@ void QSplitter::setRubberBand(int pos)
     const int rBord = 3; // customizable?
     int hw = handleWidth();
     if (!d->rubberBand) {
-        QBoolBlocker b(d->blockChildAdd);
+        QScopedValueRollback b(d->blockChildAdd, true);
         d->rubberBand = new QRubberBand(QRubberBand::Line, this);
         // For accessibility to identify this special widget.
         d->rubberBand->setObjectName("qt_rubberband"_L1);

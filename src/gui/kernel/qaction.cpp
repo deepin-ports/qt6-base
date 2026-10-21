@@ -30,10 +30,12 @@ using namespace Qt::StringLiterals;
  */
 static QString qt_strippedText(QString s)
 {
-    s.remove("..."_L1);
-    for (int i = 0; i < s.size(); ++i) {
-        if (s.at(i) == u'&')
+    for (qsizetype i = 0; i < s.size(); ++i) {
+        const QChar &c = s.at(i);
+        if (c == u'&' || c == u'\x2026')    // Horizontal Ellipsis
             s.remove(i, 1);
+        else if (i + 2 < s.size() && c == u'.' && s.at(i + 1) == u'.' && s.at(i + 2) == u'.')
+            s.remove(i, 3);
     }
     return s.trimmed();
 }
@@ -1324,5 +1326,7 @@ Q_GUI_EXPORT QDebug operator<<(QDebug d, const QAction *action)
 #endif // QT_NO_DEBUG_STREAM
 
 QT_END_NAMESPACE
+
+#undef QAPP_CHECK
 
 #include "moc_qaction.cpp"

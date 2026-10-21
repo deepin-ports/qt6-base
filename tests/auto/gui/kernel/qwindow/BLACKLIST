@@ -19,10 +19,12 @@ android
 android
 [isActive]
 android
-[modalWindowModallity]
+[modalWindowModality]
 android
 [enterLeaveOnWindowShowHide]
 windows-10
 windows-11
 android
-rhel
+macos-26 # QTBUG-142157
+[stateChangeSignal]
+macos # QTBUG-140388

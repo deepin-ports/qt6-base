@@ -1,6 +1,7 @@
 // Copyright (C) 2019 The Qt Company Ltd.
 // Copyright (C) 2019 Intel Corporation.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #if 0
 #pragma qt_class(QtSystemDetection)
@@ -242,7 +243,8 @@
 #if defined(__SIZEOF_INT128__)
 // Compiler used in VxWorks SDK declares __SIZEOF_INT128__ but VxWorks doesn't support this type,
 // so we can't rely solely on compiler here.
-#if !defined(Q_OS_VXWORKS)
+// MSVC STL used by MSVC and clang-cl does not support int128
+#if !defined(Q_OS_VXWORKS) && !defined(_MSC_VER)
 #  define QT_COMPILER_SUPPORTS_INT128 __SIZEOF_INT128__
 #endif
 #endif // defined(__SIZEOF_INT128__)

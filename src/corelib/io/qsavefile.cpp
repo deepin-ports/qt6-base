@@ -1,5 +1,6 @@
 // Copyright (C) 2012 David Faure <faure@kde.org>
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:guaranteed-behavior
 
 #include "qsavefile.h"
 
@@ -57,8 +58,8 @@ QSaveFilePrivate::~QSaveFilePrivate()
     an error happened, and will discard the temporary file in commit().
 
     Much like with QFile, the file is opened with open(). Data is usually read
-    and written using QDataStream or QTextStream, but you can also call the
-    QIODevice-inherited functions read(), readLine(), readAll(), write().
+    and written using QDataStream or QTextStream, but you can also directly call
+    \l write().
 
     Unlike QFile, calling close() is not allowed. commit() replaces it. If commit()
     was not called and the QSaveFile instance is destroyed, the temporary file is
@@ -70,31 +71,15 @@ QSaveFilePrivate::~QSaveFilePrivate()
     \sa QTextStream, QDataStream, QFileInfo, QDir, QFile, QTemporaryFile
 */
 
-#ifdef QT_NO_QOBJECT
-QSaveFile::QSaveFile(const QString &name)
-    : QFileDevice(*new QSaveFilePrivate)
-{
-    Q_D(QSaveFile);
-    d->fileName = name;
-}
-#else
-/*!
-    Constructs a new file object to represent the file with the given \a name.
-*/
-QSaveFile::QSaveFile(const QString &name)
-    : QFileDevice(*new QSaveFilePrivate, nullptr)
-{
-    Q_D(QSaveFile);
-    d->fileName = name;
-}
-
 /*!
     Constructs a new file object with the given \a parent.
+    You need to call setFileName() before open().
 */
 QSaveFile::QSaveFile(QObject *parent)
     : QFileDevice(*new QSaveFilePrivate, parent)
 {
 }
+
 /*!
     Constructs a new file object with the given \a parent to represent the
     file with the specified \a name.
@@ -105,7 +90,14 @@ QSaveFile::QSaveFile(const QString &name, QObject *parent)
     Q_D(QSaveFile);
     d->fileName = name;
 }
-#endif
+
+/*!
+    \fn QSaveFile::QSaveFile(const std::filesystem::path &path, QObject *parent)
+    \since 6.11
+
+    Constructs a new file object with the given \a parent to represent the
+    file with the specified \a path.
+*/
 
 /*!
     Destroys the file object, discarding the saved contents unless commit() was called.
@@ -132,6 +124,12 @@ QString QSaveFile::fileName() const
 }
 
 /*!
+    \fn std::filesystem::path QSaveFile::filesystemFileName() const
+    \since 6.11
+    Returns fileName() as \c{std::filesystem::path}.
+*/
+
+/*!
     Sets the \a name of the file. The name can have no path, a
     relative path, or an absolute path.
 
@@ -143,16 +141,21 @@ void QSaveFile::setFileName(const QString &name)
 }
 
 /*!
-    Opens the file using OpenMode \a mode, returning true if successful;
-    otherwise false.
+    \fn QSaveFile::setFileName(const std::filesystem::path &name)
+    \since 6.11
+    \overload
+*/
 
-    Important: the \a mode must include QIODevice::WriteOnly.
-    It may also have additional flags, such as QIODevice::Text and QIODevice::Unbuffered.
+/*!
+    Opens the file using \a mode flags. Returns \c true if successful;
+    otherwise returns \c false.
 
-    QIODevice::ReadWrite, QIODevice::Append, QIODevice::NewOnly and
-    QIODevice::ExistingOnly are not supported at the moment.
+    Important: The flags for \a mode must include \l QIODeviceBase::WriteOnly. Other
+    common flags you can use are \l Text and \l Unbuffered. Flags not supported at the
+    moment are \l ReadOnly (and therefore \l ReadWrite), \l Append, \l NewOnly and \l ExistingOnly;
+    they will generate a runtime warning.
 
-    \sa QIODevice::OpenMode, setFileName(), QT_USE_NODISCARD_FILE_OPEN
+    \sa setFileName(), QT_USE_NODISCARD_FILE_OPEN
 */
 bool QSaveFile::open(OpenMode mode)
 {
@@ -209,13 +212,14 @@ bool QSaveFile::open(OpenMode mode)
         return false;
     };
 
-    bool requiresDirectWrite = false;
+#if defined(Q_OS_WIN) || defined(Q_OS_ANDROID)
+    const bool requiresDirectWrite =
 #ifdef Q_OS_WIN
-    // check if it is an Alternate Data Stream
-    requiresDirectWrite = d->finalFileName == d->fileName && d->fileName.indexOf(u':', 2) > 1;
+        // check if it is an Alternate Data Stream
+        d->finalFileName == d->fileName && d->fileName.indexOf(u':', 2) > 1;
 #elif defined(Q_OS_ANDROID)
-    // check if it is a content:// URL
-    requiresDirectWrite  = d->fileName.startsWith("content://"_L1);
+        // check if it is a content:// URL
+        d->fileName.startsWith("content://"_L1);
 #endif
     if (requiresDirectWrite) {
         // yes, we can't rename onto it...
@@ -232,6 +236,7 @@ bool QSaveFile::open(OpenMode mode)
         }
         return false;
     }
+#endif // Q_OS_WIN || Q_OS_ANDROID
 
     d->fileEngine.reset(new QTemporaryFileEngine(&d->finalFileName, QTemporaryFileEngine::Win32NonShared));
     // if the target file exists, we'll copy its permissions below,
@@ -303,10 +308,15 @@ bool QSaveFile::commit()
     // Sync to disk if possible. Ignore errors (e.g. not supported).
     fe->syncToDisk();
 
+    // ensure we act on either a close()/flush() failure or a previous write()
+    // problem
+    if (d->error == QFileDevice::NoError)
+        d->error = d->writeError;
+    d->writeError = QFileDevice::NoError;
+
     if (d->useTemporaryFile) {
-        if (d->writeError != QFileDevice::NoError) {
+        if (d->error != QFileDevice::NoError) {
             fe->remove();
-            d->writeError = QFileDevice::NoError;
             return false;
         }
         // atomically replace old file with new file
@@ -318,7 +328,10 @@ bool QSaveFile::commit()
             return false;
         }
     }
-    return true;
+
+    // return true if all previous write() calls succeeded and if close() and
+    // flush() succeeded.
+    return d->error == QFileDevice::NoError;
 }
 
 /*!
@@ -408,8 +421,6 @@ bool QSaveFile::directWriteFallback() const
 
 QT_END_NAMESPACE
 
-#ifndef QT_NO_QOBJECT
 #include "moc_qsavefile.cpp"
-#endif
 
 #endif // QT_CONFIG(temporaryfile)

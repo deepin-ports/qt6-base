@@ -1,6 +1,7 @@
 // Copyright (C) 2021 The Qt Company Ltd.
 // Copyright (C) 2022 Intel Corporation.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:execute-external-code
 
 //#define QPROCESS_DEBUG
 
@@ -14,7 +15,6 @@
 #include <qbytearray.h>
 #include <qdeadlinetimer.h>
 #include <qcoreapplication.h>
-#include <qtimer.h>
 
 #if __has_include(<paths.h>)
 #include <paths.h>
@@ -105,7 +105,6 @@ void QProcessEnvironmentPrivate::insert(const QProcessEnvironmentPrivate &other)
         vars.insert(it.key(), it.value());
 
 #ifdef Q_OS_UNIX
-    const OrderedNameMapMutexLocker locker(this, &other);
     auto nit = other.nameMap.constBegin();
     const auto nend = other.nameMap.constEnd();
     for ( ; nit != nend; ++nit)
@@ -180,9 +179,7 @@ QProcessEnvironment &QProcessEnvironment::operator=(const QProcessEnvironment &o
 /*!
     \fn void QProcessEnvironment::swap(QProcessEnvironment &other)
     \since 5.0
-
-    Swaps this process environment instance with \a other. This
-    function is very fast and never fails.
+    \memberswap{process environment instance}
 */
 
 /*!
@@ -208,8 +205,10 @@ bool comparesEqual(const QProcessEnvironment &lhs, const QProcessEnvironment &rh
 {
     if (lhs.d == rhs.d)
         return true;
-
-    return lhs.d && rhs.d && lhs.d->vars == rhs.d->vars;
+    if (!(lhs.d && rhs.d))
+        return false;
+    QProcessEnvironmentPrivate::OrderedMutexLocker locker(lhs.d, rhs.d);
+    return lhs.d->vars == rhs.d->vars;
 }
 
 /*!
@@ -267,6 +266,7 @@ bool QProcessEnvironment::contains(const QString &name) const
 {
     if (!d)
         return false;
+    QProcessEnvironmentPrivate::MutexLocker locker(d);
     return d->vars.contains(d->prepareName(name));
 }
 
@@ -317,6 +317,7 @@ QString QProcessEnvironment::value(const QString &name, const QString &defaultVa
     if (!d)
         return defaultValue;
 
+    QProcessEnvironmentPrivate::MutexLocker locker(d);
     const auto it = d->vars.constFind(d->prepareName(name));
     if (it == d->vars.constEnd())
         return defaultValue;
@@ -341,6 +342,7 @@ QStringList QProcessEnvironment::toStringList() const
 {
     if (!d)
         return QStringList();
+    QProcessEnvironmentPrivate::MutexLocker locker(d);
     return d->toList();
 }
 
@@ -357,6 +359,7 @@ QStringList QProcessEnvironment::keys() const
 {
     if (!d)
         return QStringList();
+    QProcessEnvironmentPrivate::MutexLocker locker(d);
     return d->keys();
 }
 
@@ -373,6 +376,7 @@ void QProcessEnvironment::insert(const QProcessEnvironment &e)
         return;
 
     // our re-impl of detach() detaches from null
+    QProcessEnvironmentPrivate::MutexLocker locker(e.d);
     d->insert(*e.d);
 }
 
@@ -896,6 +900,16 @@ void QProcessPrivate::Channel::clear()
            to communicate with the parent process. It is implementation-defined
            if QProcess will actually use \c{vfork(2)} and if \c{vfork(2)} is
            different from standard \c{fork(2)}.
+
+    \value [since 6.9] DisableCoreDumps     Requests that QProcess disable core
+           dumps in the child process. This is useful if the executable being
+           run is likely to crash but users and maintainers are going to be
+           uninterested in generating bug reports for those conditions (for
+           example, the executable is a test process). This setting does not
+           affect the exitStatus() of the crashed process. It is implemented
+           by setting the core dump size resource soft limit to zero, meaning
+           the application can still reverse this change by raising it to a
+           value up to the hard limit.
 
     \sa setUnixProcessParameters(), unixProcessParameters()
 */
@@ -1485,22 +1499,22 @@ void QProcess::setStandardInputFile(const QString &fileName)
 
     Redirects the process' standard output to the file \a
     fileName. When the redirection is in place, the standard output
-    read channel is closed: reading from it using read() will always
-    fail, as will readAllStandardOutput().
+    read channel is closed: reading from it using \l read() will always
+    fail, as will \l readAllStandardOutput().
 
-    To discard all standard output from the process, pass nullDevice()
+    To discard all standard output from the process, pass \l nullDevice()
     here. This is more efficient than simply never reading the standard
     output, as no QProcess buffers are filled.
 
-    If the file \a fileName doesn't exist at the moment start() is
+    If the file \a fileName doesn't exist at the moment \l start() is
     called, it will be created. If it cannot be created, the starting
     will fail.
 
-    If the file exists and \a mode is QIODevice::Truncate, the file
-    will be truncated. Otherwise (if \a mode is QIODevice::Append),
+    If the file exists and \a mode is \ QIODeviceBase::Truncate, the file
+    will be truncated. Otherwise (if \a mode is \l QIODeviceBase::Append),
     the file will be appended to.
 
-    Calling setStandardOutputFile() after the process has started has
+    Calling \l setStandardOutputFile() after the process has started has
     no effect.
 
     If \a fileName is an empty string, it stops redirecting the standard
@@ -2286,6 +2300,7 @@ void QProcess::startCommand(const QString &command, OpenMode mode)
         return;
     }
     const QString program = args.takeFirst();
+    // AXIVION Next Line Qt-Security-QProcessStart: implementation
     start(program, args, mode);
 }
 
@@ -2415,6 +2430,7 @@ void QProcessPrivate::start(QIODevice::OpenMode mode)
     errorString.clear();
     startProcess();
 }
+#endif // QT_CONFIG(process)
 
 /*!
     \since 5.15
@@ -2465,6 +2481,7 @@ QStringList QProcess::splitCommand(QStringView command)
     return args;
 }
 
+#if QT_CONFIG(process)
 /*!
     \since 5.0
 
@@ -2615,6 +2632,7 @@ int QProcess::execute(const QString &program, const QStringList &arguments)
 {
     QProcess process;
     process.setProcessChannelMode(ForwardedChannels);
+    // AXIVION Next Line Qt-Security-QProcessStart: implementation
     process.start(program, arguments);
     if (!process.waitForFinished(-1) || process.error() == FailedToStart)
         return -2;
@@ -2646,10 +2664,12 @@ bool QProcess::startDetached(const QString &program,
                              qint64 *pid)
 {
     QProcess process;
+    // AXIVION DISABLE Style Qt-Security-QProcessStart: implementation
     process.setProgram(program);
     process.setArguments(arguments);
     process.setWorkingDirectory(workingDirectory);
     return process.startDetached(pid);
+    // AXIVION ENABLE Style Qt-Security-QProcessStart
 }
 
 /*!
@@ -2720,4 +2740,6 @@ QString QProcess::nullDevice()
 
 QT_END_NAMESPACE
 
+#if QT_CONFIG(process)
 #include "moc_qprocess.cpp"
+#endif

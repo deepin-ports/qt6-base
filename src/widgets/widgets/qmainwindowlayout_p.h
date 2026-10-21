@@ -1,5 +1,6 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #ifndef QMAINWINDOWLAYOUT_P_H
 #define QMAINWINDOWLAYOUT_P_H
@@ -289,7 +290,7 @@ QList<int> QMainWindowLayoutSeparatorHelper<Layout>::findSeparator(const QPoint 
     Layout *layout = const_cast<Layout*>(this->layout());
 #if QT_CONFIG(toolbar)
     QToolBarAreaLayout *toolBarAreaLayout = layout->toolBarAreaLayout();
-    if (!toolBarAreaLayout->isEmpty()) {
+    if (toolBarAreaLayout && !toolBarAreaLayout->isEmpty()) {
         // We might have a toolbar that is currently expanded, covering
         // parts of the dock area, in which case we don't want the dock
         // area layout to treat mouse events for the expanded toolbar as
@@ -363,7 +364,7 @@ public:
     void restore();
     void apply();
     void childEvent(QChildEvent *event) override;
-    void reparent(QDockWidget *dockWidget);
+    void reparentToMainWindow(QDockWidget *dockWidget);
     void destroyIfSingleItemLeft();
     QList<QDockWidget *> dockWidgets() const { return findChildren<QDockWidget *>(); }
 
@@ -537,7 +538,7 @@ public:
     void splitDockWidget(QDockWidget *after,
                          QDockWidget *dockwidget,
                          Qt::Orientation orientation);
-    Qt::DockWidgetArea dockWidgetArea(QWidget* widget) const;
+    Qt::DockWidgetArea dockWidgetArea(const QWidget* widget) const;
     bool restoreDockWidget(QDockWidget *dockwidget);
 #if QT_CONFIG(tabbar)
     void tabifyDockWidget(QDockWidget *first, QDockWidget *second);
@@ -550,13 +551,12 @@ public:
     void setDocumentMode(bool enabled);
 
     QTabBar *getTabBar();
+    void unuseTabBar(QTabBar *bar);
     QSet<QTabBar*> usedTabBars;
-    QList<QTabBar*> unusedTabBars;
     bool verticalTabsEnabled;
 
     QWidget *getSeparatorWidget();
     QSet<QWidget*> usedSeparatorWidgets;
-    QList<QWidget*> unusedSeparatorWidgets;
     int sep; // separator extent
 
 #if QT_CONFIG(tabwidget)
@@ -622,7 +622,7 @@ public:
     void revert(QLayoutItem *widgetItem);
     void applyState(QMainWindowLayoutState &newState, bool animate = true);
     void applyRestoredState();
-    void restore(bool keepSavedState = false);
+    void restore(QInternal::SaveStateRule rule);
     void animationFinished(QWidget *widget);
 
 #if QT_CONFIG(draganddrop)
@@ -644,6 +644,7 @@ private Q_SLOTS:
 #endif
 private:
 #if QT_CONFIG(tabbar)
+    void showTabBars();
     void updateTabBarShapes();
 #endif
     bool isInRestoreState = false;

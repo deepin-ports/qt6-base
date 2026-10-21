@@ -1,20 +1,25 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // Copyright (C) 2012 BogDan Vatra <bogdan@kde.org>
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:password-input-type
 
 package org.qtproject.qt.android;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.text.InputType;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.ExtractedText;
+import android.view.inputmethod.ExtractedTextRequest;
 import android.view.inputmethod.InputConnection;
 import android.view.KeyEvent;
 
 import org.qtproject.qt.android.QtInputConnection.QtInputConnectionListener;
 
+@SuppressLint("ViewConstructor")
 class QtEditText extends View
 {
     int m_initialCapsMode = 0;
@@ -101,9 +106,18 @@ class QtEditText extends View
     public InputConnection onCreateInputConnection(EditorInfo outAttrs)
     {
         outAttrs.inputType = m_inputType;
-        outAttrs.imeOptions = m_imeOptions;
+        outAttrs.imeOptions = System.getenv("QT_ANDROID_NO_FULLSCREEN_KEYBOARD") != null
+                ? m_imeOptions | EditorInfo.IME_FLAG_NO_FULLSCREEN
+                : m_imeOptions;
         outAttrs.initialCapsMode = m_initialCapsMode;
         m_inputConnection = new QtInputConnection(this,m_qtInputConnectionListener);
+
+        ExtractedText extracted = m_inputConnection.getExtractedText(new ExtractedTextRequest(), 0);
+        if (extracted != null) {
+            outAttrs.initialSelStart = extracted.selectionStart;
+            outAttrs.initialSelEnd = extracted.selectionEnd;
+        }
+
         return m_inputConnection;
     }
 
@@ -267,10 +281,6 @@ class QtEditText extends View
             break;
         case CursorHandleShowNormal:
             if (m_cursorHandle == null) {
-                // We pass this to the CursorHandle to use the QtEditText to calculate its
-                // position. This is OK as the QtEditText size matches the QtWindow size.
-                // If the size of the QtEditText is changed to not reflect the window's anymore,
-                // this should be changed to use getParent() instead of this.
                 m_cursorHandle = new CursorHandle((Activity) getContext(), this,
                         CursorHandle.IdCursorHandle,
                         android.R.attr.textSelectHandle, false);

@@ -1,5 +1,6 @@
 // Copyright (C) 2022 Intel Corporation.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #include "qtipccommon.h"
 #include "qtipccommon_p.h"
@@ -200,7 +201,7 @@ QNativeIpcKey QtIpcCommon::platformSafeKey(const QString &key, QtIpcCommon::IpcT
             QStringView prefix;
             QStringView payload = key;
             // see https://learn.microsoft.com/en-us/windows/win32/termserv/kernel-object-namespaces
-            for (QStringView candidate : { u"Local\\", u"Global\\" }) {
+            for (QStringView candidate : { u"Local\\"_sv, u"Global\\"_sv }) {
                 if (!key.startsWith(candidate))
                     continue;
                 prefix = candidate;
@@ -424,9 +425,7 @@ void QNativeIpcKey::destroy_internal() noexcept
 
 /*!
     \fn QNativeIpcKey::swap(QNativeIpcKey &other) noexcept
-
-    Swaps the native IPC key and type \a other with this object.
-    This operation is very fast and never fails.
+    \memberswap{native IPC key and type}
 */
 
 /*!
@@ -499,15 +498,8 @@ void QNativeIpcKey::setNativeKey_internal(const QString &)
 }
 
 /*!
-    \fn size_t QNativeIpcKey::qHash(const QNativeIpcKey &ipcKey) noexcept
-
-    Returns the hash value for \a ipcKey, using a default seed of \c 0.
-*/
-
-/*!
-    \fn size_t QNativeIpcKey::qHash(const QNativeIpcKey &ipcKey, size_t seed) noexcept
-
-    Returns the hash value for \a ipcKey, using \a seed to seed the calculation.
+    \fn size_t QNativeIpcKey::qHash(const QNativeIpcKey &key, size_t seed)
+    \qhash{QNativeIpcKey}
 */
 size_t qHash(const QNativeIpcKey &ipcKey, size_t seed) noexcept
 {

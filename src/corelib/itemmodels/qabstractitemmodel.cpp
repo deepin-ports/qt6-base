@@ -1,6 +1,7 @@
 // Copyright (C) 2022 The Qt Company Ltd.
 // Copyright (C) 2020 Klarälvdalens Datakonsult AB, a KDAB Group company, info@kdab.com, author Giuseppe D'Angelo <giuseppe.dangelo@kdab.com>
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #include "qabstractitemmodel.h"
 #include <private/qabstractitemmodel_p.h>
@@ -25,7 +26,8 @@
 
 QT_BEGIN_NAMESPACE
 
-Q_LOGGING_CATEGORY(lcCheckIndex, "qt.core.qabstractitemmodel.checkindex")
+Q_STATIC_LOGGING_CATEGORY(lcCheckIndex, "qt.core.qabstractitemmodel.checkindex")
+Q_STATIC_LOGGING_CATEGORY(lcReset, "qt.core.qabstractitemmodel.reset")
 
 QT_IMPL_METATYPE_EXTERN(QModelIndexList)
 
@@ -34,7 +36,7 @@ QPersistentModelIndexData *QPersistentModelIndexData::create(const QModelIndex &
     Q_ASSERT(index.isValid()); // we will _never_ insert an invalid index in the list
     QPersistentModelIndexData *d = nullptr;
     QAbstractItemModel *model = const_cast<QAbstractItemModel *>(index.model());
-    QMultiHash<QModelIndex, QPersistentModelIndexData *> &indexes = model->d_func()->persistent.indexes;
+    QMultiHash<QtPrivate::QModelIndexWrapper, QPersistentModelIndexData *> &indexes = model->d_func()->persistent.indexes;
     const auto it = indexes.constFind(index);
     if (it != indexes.cend()) {
         d = (*it);
@@ -444,9 +446,7 @@ QPersistentModelIndex &QPersistentModelIndex::operator=(const QPersistentModelIn
 /*!
     \fn void QPersistentModelIndex::swap(QPersistentModelIndex &other)
     \since 5.0
-
-    Swaps this persistent modelindex with \a other. This function is
-    very fast and never fails.
+    \memberswap{persistent modelindex}
 */
 
 /*!
@@ -1390,7 +1390,8 @@ void QAbstractItemModel::resetInternalData()
     simple table of rows and columns. Each item has a unique index specified by
     a QModelIndex.
 
-    \image modelindex-no-parent.png
+    \image modelindex-no-parent.png {Screenshot showing a 3x3 grid with numbered
+           rows and columns that shows the cell at row 1, column 2 highlighted.}
 
     Every item of data that can be accessed via a model has an associated model
     index. You can obtain this model index using the index() function. Each
@@ -2087,6 +2088,9 @@ bool QAbstractItemModel::clearItemData(const QModelIndex &index)
 */
 bool QAbstractItemModel::setItemData(const QModelIndex &index, const QMap<int, QVariant> &roles)
 {
+    if (!index.isValid() || roles.isEmpty())
+        return false;
+
     // ### TODO: Consider change the semantics of this function,
     // or deprecating/removing it altogether.
     //
@@ -2656,6 +2660,9 @@ QSize QAbstractItemModel::span(const QModelIndex &) const
 */
 QHash<int,QByteArray> QAbstractItemModel::roleNames() const
 {
+    // if the return value ever becomes dependent on *this, also change the following overrides:
+    // - QFileSystemModel
+    // - QConcatenateTablesProxyModel
     return QAbstractItemModelPrivate::defaultRoleNames();
 }
 
@@ -3400,6 +3407,14 @@ void QAbstractItemModel::endMoveColumns()
 */
 void QAbstractItemModel::beginResetModel()
 {
+    Q_D(QAbstractItemModel);
+    if (d->resetting) {
+        qWarning() << "beginResetModel called on" << this << "without calling endResetModel first";
+        // Warn, but don't return early in case user code relies on the incorrect behavior.
+    }
+
+    qCDebug(lcReset) << "beginResetModel called; about to emit modelAboutToBeReset";
+    d->resetting = true;
     emit modelAboutToBeReset(QPrivateSignal());
 }
 
@@ -3417,8 +3432,15 @@ void QAbstractItemModel::beginResetModel()
 void QAbstractItemModel::endResetModel()
 {
     Q_D(QAbstractItemModel);
+    if (!d->resetting) {
+        qWarning() << "endResetModel called on" << this << "without calling beginResetModel first";
+        // Warn, but don't return early in case user code relies on the incorrect behavior.
+    }
+
+    qCDebug(lcReset) << "endResetModel called; about to emit modelReset";
     d->invalidatePersistentIndexes();
     resetInternalData();
+    d->resetting = false;
     emit modelReset(QPrivateSignal());
 }
 
@@ -4142,12 +4164,9 @@ bool QAbstractListModel::dropMimeData(const QMimeData *data, Qt::DropAction acti
 */
 
 /*!
-    \fn size_t qHash(const QPersistentModelIndex &index, size_t seed = 0)
+    \fn size_t qHash(const QPersistentModelIndex &key, size_t seed)
     \since 5.0
-    \relates QPersistentModelIndex
-
-    Returns a hash of the QPersistentModelIndex \a index, using \a seed to
-    seed the calculation.
+    \qhashold{QPersistentModelIndex}
 */
 
 

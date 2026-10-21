@@ -13,6 +13,9 @@
 #if defined(Q_OS_WIN)
 #  include <qt_windows.h>
 #endif
+#ifdef Q_OS_ANDROID
+#include <private/qjnihelpers_p.h>
+#endif
 
 #ifdef Q_OS_UNIX
 #include <unistd.h>
@@ -459,7 +462,7 @@ void tst_qstandardpaths::testFindExecutable_data()
     QTest::addColumn<QString>("needle");
     QTest::addColumn<QString>("expected");
 #ifdef Q_OS_WIN
-    const QFileInfo cmdFi = QFileInfo(QDir::cleanPath(QString::fromLocal8Bit(qgetenv("COMSPEC"))));
+    const QFileInfo cmdFi = QFileInfo(QDir::cleanPath(qEnvironmentVariable("COMSPEC")));
     const QString cmdPath = cmdFi.absoluteFilePath();
 
     Q_ASSERT(cmdFi.exists());
@@ -472,16 +475,21 @@ void tst_qstandardpaths::testFindExecutable_data()
     QTest::newRow("win-cmd-nosuffix")
         << QString() << QString::fromLatin1("cmd") << cmdPath;
 
-    if (QOperatingSystemVersion::current() >= QOperatingSystemVersion::Windows8) {
-        // The logo executable on Windows 8 is perfectly suited for testing that the
-        // suffix mechanism is not thrown off by dots in the name.
-        // Note: Requires disabling WOW64 redirection, see initTestCase()
-        const QString logo = QLatin1String("microsoft.windows.softwarelogo.showdesktop");
-        const QString logoPath = cmdFi.absolutePath() + QLatin1Char('/') + logo + QLatin1String(".exe");
-        QTest::newRow("win8-logo")
-            << QString() << (logo + QLatin1String(".exe")) << logoPath;
-        QTest::newRow("win8-logo-nosuffix")
-            << QString() << logo << logoPath;
+    // Windows 8 has some executables with multiple dots in the name such as
+    // the logo executable, which are perfectly suited for testing that the
+    // suffix mechanism is not thrown off by dots in the name. Testing has
+    // shown that some are sometimes missing and this requires disabling WOW64
+    // redirection (see initTestCase()), so search for something applicable.
+    QDirListing list(cmdFi.absolutePath(), QDirListing::IteratorFlag::FilesOnly);
+    for (const QDirListing::DirEntry &e : list) {
+        QString path = e.absoluteFilePath();
+        QString basename = e.completeBaseName();
+        if (!path.endsWith(u".exe") || !basename.contains(u'.'))
+            continue;
+        QTest::addRow("win-multidot-%s", qPrintable(basename))
+            << QString() << (basename + ".exe"_L1) << path;
+        QTest::addRow("win-multidot-nosuffix-%s", qPrintable(basename))
+            << QString() << basename << path;
     }
 #else
 # ifndef Q_OS_WASM
@@ -529,10 +537,15 @@ void tst_qstandardpaths::testFindExecutableLinkToDirectory()
 #ifdef Q_OS_WASM
     QSKIP("No applicationdir on wasm");
 #else
+    const QString appPath = QCoreApplication::applicationDirPath();
+#ifdef Q_OS_ANDROID
+    if (QtAndroidPrivate::isUncompressedNativeLibs())
+        QSKIP("Can't create a link to applicationDir which points inside an APK on Android");
+#endif
     // link to directory
     const QString target = QDir::tempPath() + QDir::separator() + QLatin1String("link.lnk");
     QFile::remove(target);
-    QFile appFile(QCoreApplication::applicationDirPath());
+    QFile appFile(appPath);
     QVERIFY(appFile.link(target));
     QVERIFY(QStandardPaths::findExecutable(target).isEmpty());
     QFile::remove(target);

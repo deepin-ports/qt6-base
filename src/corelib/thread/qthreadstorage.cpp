@@ -1,8 +1,11 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #include "qthreadstorage.h"
+#include "qthreadstorage_p.h"
 
+#include "private/qcoreapplication_p.h"
 #include "qthread.h"
 #include "qthread_p.h"
 #include "qmutex.h"
@@ -78,10 +81,6 @@ QThreadStorageData::~QThreadStorageData()
 void **QThreadStorageData::get() const
 {
     QThreadData *data = QThreadData::current();
-    if (!data) {
-        qWarning("QThreadStorage::get: QThreadStorage can only be used with threads started with QThread");
-        return nullptr;
-    }
     QList<void *> &tls = data->tls;
     if (tls.size() <= id)
         tls.resize(id + 1);
@@ -98,10 +97,6 @@ void **QThreadStorageData::get() const
 void **QThreadStorageData::set(void *p)
 {
     QThreadData *data = QThreadData::current();
-    if (!data) {
-        qWarning("QThreadStorage::set: QThreadStorage can only be used with threads started with QThread");
-        return nullptr;
-    }
     QList<void *> &tls = data->tls;
     if (tls.size() <= id)
         tls.resize(id + 1);
@@ -132,11 +127,19 @@ void **QThreadStorageData::set(void *p)
     return &value;
 }
 
-void QThreadStorageData::finish(void **p)
+void QThreadStoragePrivate::init()
 {
-    QList<void *> *tls = reinterpret_cast<QList<void *> *>(p);
-    if (!tls || tls->isEmpty() || !destructors())
+    // Make sure the Q_GLOBAL_STATIC is initialized, ensuring consistent
+    // destruction order.
+    destructors();
+}
+
+void QThreadStoragePrivate::finish(QList<void *> *tls, bool suppressWarnings)
+{
+    if (tls->isEmpty() || !destructors())
         return; // nothing to do
+    if (!QCoreApplication::instanceExists())
+        suppressWarnings = true;
 
     DEBUG_MSG("QThreadStorageData: Destroying storage for thread %p", QThread::currentThread());
     while (!tls->isEmpty()) {
@@ -156,9 +159,9 @@ void QThreadStorageData::finish(void **p)
         locker.unlock();
 
         if (!destructor) {
-            if (QThread::currentThread())
-                qWarning("QThreadStorage: Thread %p exited after QThreadStorage %d destroyed",
-                         QThread::currentThread(), i);
+            if (!suppressWarnings)
+                qWarning("QThreadStorage: entry %d destroyed before end of thread %p",
+                         i, QThread::currentThread());
             continue;
         }
         destructor(q); //crash here might mean the thread exited after qthreadstorage was destroyed

@@ -1,5 +1,6 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #include "qstyle.h"
 #include "qapplication.h"
@@ -7,13 +8,16 @@
 #include "qwidget.h"
 #include "qbitmap.h"
 #include "qpixmapcache.h"
+#include "qset.h"
 #include "qstyleoption.h"
 #include "private/qstyle_p.h"
+#include "private/qstylehelper_p.h"
 #include "private/qguiapplication_p.h"
 #include <qpa/qplatformtheme.h>
 #ifndef QT_NO_DEBUG
 #include "qdebug.h"
 #endif
+#include <QtCore/q20utility.h>
 
 #include <limits.h>
 #include <algorithm>
@@ -75,6 +79,7 @@ static int unpackControlTypes(QSizePolicy::ControlTypes controls, QSizePolicy::C
     is a zero pointer.
 
     \image paintsystem-stylepainter.png
+           {Diagram showing QStylePainter inherits from QPainter}
 
     The paint system also provides the QStylePainter class inheriting
     from QPainter.  QStylePainter is a convenience class for drawing
@@ -85,7 +90,7 @@ static int unpackControlTypes(QSizePolicy::ControlTypes controls, QSizePolicy::C
 
     \table 100%
     \row
-    \li \inlineimage paintsystem-icon.png
+    \li \inlineimage paintsystem-icon.png {Icon used in Qt}
     \li \b QIcon
 
     The QIcon class provides scalable icons in different modes and states.
@@ -125,7 +130,7 @@ static int unpackControlTypes(QSizePolicy::ControlTypes controls, QSizePolicy::C
     native widgets. The diagram below shows a QComboBox in nine
     different styles.
 
-    \image qstyle-comboboxes.png Nine combo boxes
+    \image qstyle-comboboxes.png {Nine combo boxes showing different styles}
 
     Topics:
 
@@ -226,8 +231,6 @@ static int unpackControlTypes(QSizePolicy::ControlTypes controls, QSizePolicy::C
     them differently:
 
     \snippet customstyle/customstyle.cpp 2
-    \snippet customstyle/customstyle.cpp 3
-    \snippet customstyle/customstyle.cpp 4
 
     Notice that we don't use the \c widget argument, except to pass it
     on to the QWindowStyle::drawPrimitive() function. As mentioned
@@ -240,8 +243,6 @@ static int unpackControlTypes(QSizePolicy::ControlTypes controls, QSizePolicy::C
     of the correct type before using it. For example:
 
     \snippet customstyle/customstyle.cpp 0
-    \dots
-    \snippet customstyle/customstyle.cpp 1
 
     When implementing a custom style, you cannot assume that the
     widget is a QSpinBox just because the enum value is called
@@ -614,7 +615,15 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
     QRect aligned = alignedRect(QGuiApplication::layoutDirection(), QFlag(alignment), pixmap.size() / scale, rect);
     QRect inter = aligned.intersected(rect);
 
-    painter->drawPixmap(inter.x(), inter.y(), pixmap, inter.x() - aligned.x(), inter.y() - aligned.y(), qRound(inter.width() * scale), qRound(inter.height() *scale));
+    // The source rectangle indexes the pixmap's device pixels, so both the
+    // offset and the size of the visible (intersected) area have to be scaled
+    // by the pixmap's device pixel ratio.
+    const QRect source(qRound((inter.x() - aligned.x()) * scale),
+                       qRound((inter.y() - aligned.y()) * scale),
+                       qRound(inter.width() * scale),
+                       qRound(inter.height() * scale));
+
+    painter->drawPixmap(inter.topLeft(), pixmap, source);
 }
 
 /*!
@@ -721,7 +730,7 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
     \value State_AutoRaise Used to indicate if auto-raise appearance should be used on a tool button.
     \value State_Children Used to indicate if an item view branch has children.
     \value State_DownArrow Used to indicate if a down arrow should be visible on the widget.
-    \value State_Editing Used to indicate if an editor is opened on the widget.
+    \value State_Editing Deprecated. No longer used as the editor is drawn over the itemview cell.
     \value State_Enabled Used to indicate if the widget is enabled.
     \value State_HasEditFocus Used to indicate if the widget currently has edit focus.
     \value State_HasFocus Used to indicate if the widget has focus.
@@ -1733,8 +1742,16 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
         by pressing Alt, followed by using the arrow keys to select
         the desired item.
 
-    \value SH_ComboBox_ListMouseTracking  Mouse tracking in combobox
-        drop-down lists.
+    \value SH_ComboBox_ListMouseTracking_Current  Mouse tracking in
+        combobox drop-down lists, the item under the cursor is made
+        the current item (QStyle::State_Selected).
+
+    \value SH_ComboBox_ListMouseTracking  Deprecated. Use
+        \l{SH_ComboBox_ListMouseTracking_Current} instead.
+
+    \value SH_ComboBox_ListMouseTracking_Active  Mouse tracking in
+        combobox drop-down lists, the item under the cursor is not
+        made the current item, only active (QStyle::State_MouseOver).
 
     \value SH_Menu_MouseTracking  Mouse tracking in popup menus.
 
@@ -1832,7 +1849,7 @@ void QStyle::drawItemPixmap(QPainter *painter, const QRect &rect, int alignment,
     message box should be centered or not (see QDialogButtonBox::setCentered()).
 
     \value SH_MessageBox_TextInteractionFlags A boolean indicating if
-    the text in a message box should allow user interfactions (e.g.
+    the text in a message box should allow user interactions (e.g.
     selection) or not.
 
     \value SH_TitleBar_AutoRaise A boolean indicating whether
@@ -2232,7 +2249,7 @@ int QStyle::sliderPositionFromValue(int min, int max, int logicalValue, int span
     if (range > (uint)INT_MAX/4096) {
         double dpos = (double(p))/(double(range)/span);
         return int(dpos);
-    } else if (range > (uint)span) {
+    } else if (q20::cmp_greater(range, span)) {
         return (2 * p * span + range) / (2*range);
     } else {
         uint div = span / range;
@@ -2271,7 +2288,7 @@ int QStyle::sliderValueFromPosition(int min, int max, int pos, int span, bool up
 
     const qint64 range = qint64(max) - min;
 
-    if ((uint)span > range) {
+    if (q20::cmp_greater(span, range)) {
         const int tmp = (2 * range * pos + span) / (qint64(2) * span);
         return upsideDown ? max - tmp : tmp + min;
     } else {
@@ -2419,6 +2436,53 @@ bool QStylePrivate::useFullScreenForPopup()
 {
     auto theme = QGuiApplicationPrivate::platformTheme();
     return theme && theme->themeHint(QPlatformTheme::UseFullScreenForPopupMenu).toBool();
+}
+
+//
+// QCachedPainter
+QSet<QString> QCachedPainter::s_pixmapCacheKeys;
+QCachedPainter::QCachedPainter(QPainter *painter, const QString &cachePrefix,
+                               const QStyleOption *option, QSize size, QRect paintRect)
+    : m_painter(painter)
+    , m_option(option)
+    , m_paintRect(paintRect)
+{
+    const auto sz = size.isEmpty() ? option->rect.size() : size;
+    const qreal dpr = QStyleHelper::getDpr(painter);
+    m_pixmapName = QStyleHelper::uniqueName(cachePrefix, option, sz, dpr);
+    m_alreadyCached = QPixmapCache::find(m_pixmapName, &m_pixmap);
+    if (!m_alreadyCached) {
+        m_pixmap = styleCachePixmap(sz, dpr);
+        m_pixmapPainter = std::make_unique<QPainter>(&m_pixmap);
+        m_pixmapPainter->setRenderHints(painter->renderHints());
+        s_pixmapCacheKeys += m_pixmapName;
+    }
+}
+
+QCachedPainter::~QCachedPainter()
+{
+    finish();
+    if (!m_alreadyCached)
+        QPixmapCache::insert(m_pixmapName, m_pixmap);
+}
+
+void QCachedPainter::finish()
+{
+    m_pixmapPainter.reset();
+    if (!m_pixmapDrawn) {
+        m_pixmapDrawn = true;
+        if (m_paintRect.isNull())
+            m_painter->drawPixmap(m_option->rect.topLeft(), m_pixmap);
+        else
+            m_painter->drawPixmap(m_paintRect, m_pixmap);
+    }
+}
+
+void QCachedPainter::cleanupPixmapCache()
+{
+    for (const auto &key : s_pixmapCacheKeys)
+        QPixmapCache::remove(key);
+    s_pixmapCacheKeys.clear();
 }
 
 QT_END_NAMESPACE

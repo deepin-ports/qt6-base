@@ -35,7 +35,7 @@ QT_BEGIN_NAMESPACE
     (inherited from QOpenGLCompositorWindow).
 
     \note When implementing QOpenGLCompositorWindow::textures() for
-    windows of type RasterSurface or RasterGLSurface, simply return
+    windows of type RasterSurface, simply return
     the list provided by this class' textures().
 */
 
@@ -141,6 +141,10 @@ void QOpenGLCompositorBackingStore::flush(QWindow *flushedWindow, const QRegion 
     Q_UNUSED(region);
     Q_UNUSED(offset);
 
+    QOpenGLCompositorWindow *handle = dynamic_cast<QOpenGLCompositorWindow *>(flushedWindow->handle());
+    if (handle && !handle->backingStore())
+        handle->setBackingStore(this);
+
     if (!rhi(flushedWindow)) {
         QPlatformBackingStoreRhiConfig rhiConfig;
         rhiConfig.setApi(QPlatformBackingStoreRhiConfig::OpenGL);
@@ -159,7 +163,8 @@ QPlatformBackingStore::FlushResult QOpenGLCompositorBackingStore::rhiFlush(QWind
                                                                            const QRegion &region,
                                                                            const QPoint &offset,
                                                                            QPlatformTextureList *textures,
-                                                                           bool translucentBackground)
+                                                                           bool translucentBackground,
+                                                                           qreal sourceTransformFactor)
 {
     // QOpenGLWidget/QQuickWidget content provided as textures. The raster content goes on top.
 
@@ -167,6 +172,7 @@ QPlatformBackingStore::FlushResult QOpenGLCompositorBackingStore::rhiFlush(QWind
     Q_UNUSED(offset);
     Q_UNUSED(translucentBackground);
     Q_UNUSED(sourceDevicePixelRatio);
+    Q_UNUSED(sourceTransformFactor);
 
     m_rhi = rhi(window);
     Q_ASSERT(m_rhi);

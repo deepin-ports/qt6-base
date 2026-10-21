@@ -15,6 +15,7 @@
  * pre-defined list of header files.
  */
 
+#include <algorithm>
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -205,6 +206,8 @@ public:
 
     const std::string &includeDir() const { return m_includeDir; }
 
+    const std::string &installIncludeDir() const { return m_installIncludeDir; }
+
     const std::string &privateIncludeDir() const { return m_privateIncludeDir; }
 
     const std::string &qpaIncludeDir() const { return m_qpaIncludeDir; }
@@ -335,10 +338,11 @@ private:
         std::string ssgHeadersFilter;
         std::string privateHeadersFilter;
         std::string publicNamespaceFilter;
-        static std::unordered_map<std::string, CommandLineOption<std::string>> stringArgumentMap = {
+        const std::unordered_map<std::string, CommandLineOption<std::string>> stringArgumentMap = {
             { "-module", { &m_moduleName } },
             { "-sourceDir", { &m_sourceDir } },
             { "-binaryDir", { &m_binaryDir } },
+            { "-installIncludeDir", { &m_installIncludeDir, true } },
             { "-privateHeadersFilter", { &privateHeadersFilter, true } },
             { "-qpaHeadersFilter", { &qpaHeadersFilter, true } },
             { "-rhiHeadersFilter", { &rhiHeadersFilter, true } },
@@ -353,14 +357,14 @@ private:
             { "-publicNamespaceFilter", { &publicNamespaceFilter, true } },
         };
 
-        static const std::unordered_map<std::string, CommandLineOption<std::set<std::string>>>
+        const std::unordered_map<std::string, CommandLineOption<std::set<std::string>>>
                 listArgumentMap = {
                     { "-headers", { &m_headers, true } },
                     { "-generatedHeaders", { &m_generatedHeaders, true } },
                     { "-knownModules", { &m_knownModules, true } },
                 };
 
-        static const std::unordered_map<std::string, CommandLineOption<bool>> boolArgumentMap = {
+        const std::unordered_map<std::string, CommandLineOption<bool>> boolArgumentMap = {
             { "-nonQt", { &m_isNonQtModule, true } }, { "-debug", { &m_debug, true } },
             { "-help", { &m_printHelpOnly, true } },
             { "-internal", { &m_isInternal, true } }, { "-all", { &m_scanAllMode, true } },
@@ -372,7 +376,7 @@ private:
         std::string *currentValue = nullptr;
         std::set<std::string> *currentListValue = nullptr;
 
-        auto parseArgument = [&currentValue, &currentListValue](const std::string &arg) -> bool {
+        auto parseArgument = [&](const std::string &arg) -> bool {
             if (arg[0] == '-') {
                 currentValue = nullptr;
                 currentListValue = nullptr;
@@ -499,10 +503,10 @@ private:
     // Convert all paths from command line to a generic one.
     void normilizePaths()
     {
-        static std::array<std::string *, 8> paths = {
-            &m_sourceDir,     &m_binaryDir,  &m_includeDir,        &m_privateIncludeDir,
-            &m_qpaIncludeDir, &m_rhiIncludeDir, &m_stagingDir,
-            &m_versionScriptFile,
+        const std::array paths = {
+            &m_sourceDir,         &m_binaryDir,         &m_includeDir,
+            &m_installIncludeDir, &m_privateIncludeDir, &m_qpaIncludeDir,
+            &m_rhiIncludeDir,     &m_stagingDir,        &m_versionScriptFile,
         };
         for (auto path : paths) {
             if (!path->empty())
@@ -514,6 +518,7 @@ private:
     std::string m_sourceDir;
     std::string m_binaryDir;
     std::string m_includeDir;
+    std::string m_installIncludeDir;
     std::string m_privateIncludeDir;
     std::string m_qpaIncludeDir;
     std::string m_rhiIncludeDir;
@@ -717,7 +722,7 @@ public:
             if (generateVersionHeader(versionFile)) {
                 if (!generateAliasedHeaderFileIfTimestampChanged(
                             m_commandLineArgs->includeDir() + '/' + versionHeaderCamel,
-                            versionHeaderFilename, originalStamp)) {
+                            versionFile, originalStamp)) {
                     error = SyncFailed;
                 }
                 m_masterHeaderContents[versionHeaderFilename] = {};
@@ -1328,8 +1333,11 @@ public:
                         }
                         for (const auto &module : m_commandLineArgs->knownModules()) {
                             std::string suggestedHeader = "Qt" + module + '/' + includedHeader;
-                            if (std::filesystem::exists(m_commandLineArgs->includeDir() + "/../"
-                                                        + suggestedHeader)) {
+                            const std::string suggestedHeaderReversePath = "/../" + suggestedHeader;
+                            if (std::filesystem::exists(m_commandLineArgs->includeDir()
+                                                        + suggestedHeaderReversePath)
+                                || std::filesystem::exists(m_commandLineArgs->installIncludeDir()
+                                                           + '/' + suggestedHeader)) {
                                 faults |= IncludeChecks;
                                 std::cerr << m_warningMessagePreamble << m_currentFileString
                                           << ":" << m_currentFileLineNumber
@@ -1526,10 +1534,12 @@ public:
         for (const auto &headerContents : m_masterHeaderContents) {
             if (!headerContents.second.empty()) {
                 buffer << "#if QT_CONFIG(" << headerContents.second << ")\n"
-                       << "#include \"" << headerContents.first << "\"\n"
+                       << "#include <" << m_commandLineArgs->moduleName() << "/"
+                       << headerContents.first << ">\n"
                        << "#endif\n";
             } else {
-                buffer << "#include \"" << headerContents.first << "\"\n";
+                buffer << "#include <" << m_commandLineArgs->moduleName() << "/"
+                       << headerContents.first << ">\n";
             }
         }
         buffer << "#endif\n";
@@ -1558,7 +1568,7 @@ public:
     [[nodiscard]] bool generateDeprecatedHeaders()
     {
         static std::regex cIdentifierSymbolsRegex("[^a-zA-Z0-9_]");
-        static std::string guard_base = "DEPRECATED_HEADER_" + m_commandLineArgs->moduleName();
+        const std::string guard_base = "DEPRECATED_HEADER_" + m_commandLineArgs->moduleName();
         bool result = true;
         for (auto it = m_deprecatedHeaders.begin(); it != m_deprecatedHeaders.end(); ++it) {
             const std::string &descriptor = it->first;
@@ -1663,7 +1673,7 @@ public:
 void SyncScanner::updateSymbolDescriptor(const std::string &symbol, const std::string &file,
                                          SymbolDescriptor::SourceType type)
 {
-    if (m_commandLineArgs->showOnly())
+    if (m_commandLineArgs->showOnly() || m_commandLineArgs->debug())
         std::cout << "    SYMBOL: " << symbol << std::endl;
     m_symbols[symbol].update(file, type);
 }
@@ -1723,9 +1733,16 @@ bool SyncScanner::generateQtCamelCaseFileIfContentChanged(const std::string &out
     if (m_commandLineArgs->showOnly())
         return true;
 
-    std::string buffer = "#include \"";
+    // Safety check: aliasedFilePath should not be empty
+    if (aliasedFilePath.empty()) {
+        std::cerr << "ERROR: Empty aliasedFilePath for " << outputFilePath << std::endl;
+        return false;
+    }
+
+    std::string buffer = "#include <";
+    buffer += m_commandLineArgs->moduleName() + "/";
     buffer += aliasedFilePath;
-    buffer += "\" // IWYU pragma: export\n";
+    buffer += "> // IWYU pragma: export\n";
 
     return writeIfDifferent(outputFilePath, buffer);
 }
@@ -1740,6 +1757,17 @@ bool SyncScanner::generateAliasedHeaderFileIfTimestampChanged(const std::string 
     if (m_commandLineArgs->showOnly())
         return true;
 
+    std::filesystem::path aliased(aliasedFilePath);
+    std::filesystem::path includeDir(m_commandLineArgs->includeDir());
+
+    // Check if paths have the same root (drive on Windows).
+    // If they don't, the alias cannot be inside includeDir, so use absolute path.
+    bool sameRoot = !aliased.is_absolute() || includeDir.root_name() == aliased.root_name();
+
+    auto relativePath = sameRoot ? std::filesystem::relative(aliased, includeDir).generic_string()
+                                 : std::string();
+    bool aliasIsInsideIncludeDir = sameRoot && relativePath.find("../") != 0;
+
     if (std::filesystem::exists({ outputFilePath })
         && std::filesystem::last_write_time({ outputFilePath }) >= originalStamp) {
         return true;
@@ -1752,7 +1780,13 @@ bool SyncScanner::generateAliasedHeaderFileIfTimestampChanged(const std::string 
         std::cerr << "Unable to write header file alias: " << outputFilePath << std::endl;
         return false;
     }
-    ofs << "#include \"" << aliasedFilePath << "\" // IWYU pragma: export\n";
+
+    ofs << "#include ";
+    if (aliasIsInsideIncludeDir)
+        ofs << "<" << m_commandLineArgs->moduleName() + "/" << relativePath << ">";
+    else
+        ofs << "\"" << aliasedFilePath << "\"";
+    ofs << " // IWYU pragma: export\n";
     ofs.close();
     return true;
 }

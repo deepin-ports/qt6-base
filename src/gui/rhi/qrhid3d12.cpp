@@ -7,6 +7,7 @@
 #include <comdef.h>
 #include "qrhid3dhelpers_p.h"
 #include "cs_mipmap_p.h"
+#include "cs_mipmap_3d_p.h"
 
 #if __has_include(<pix.h>)
 #include <pix.h>
@@ -249,13 +250,18 @@ bool QRhiD3D12::create(QRhi::Flags flags)
         }
     }
 
+    activeAdapter = nullptr;
+
     if (!importedDevice) {
         IDXGIAdapter1 *adapter;
         int requestedAdapterIndex = -1;
         if (qEnvironmentVariableIsSet("QT_D3D_ADAPTER_INDEX"))
             requestedAdapterIndex = qEnvironmentVariableIntValue("QT_D3D_ADAPTER_INDEX");
 
-        // The importParams may specify an adapter by the luid, take that into account.
+        if (requestedRhiAdapter)
+            adapterLuid = static_cast<QD3D12Adapter *>(requestedRhiAdapter)->luid;
+
+        // importParams or requestedRhiAdapter may specify an adapter by the luid, use that in the absence of an env.var. override.
         if (requestedAdapterIndex < 0 && (adapterLuid.LowPart || adapterLuid.HighPart)) {
             for (int adapterIndex = 0; dxgiFactory->EnumAdapters1(UINT(adapterIndex), &adapter) != DXGI_ERROR_NOT_FOUND; ++adapterIndex) {
                 DXGI_ADAPTER_DESC1 desc;
@@ -282,7 +288,6 @@ bool QRhiD3D12::create(QRhi::Flags flags)
             }
         }
 
-        activeAdapter = nullptr;
         for (int adapterIndex = 0; dxgiFactory->EnumAdapters1(UINT(adapterIndex), &adapter) != DXGI_ERROR_NOT_FOUND; ++adapterIndex) {
             DXGI_ADAPTER_DESC1 desc;
             adapter->GetDesc1(&desc);
@@ -342,6 +347,8 @@ bool QRhiD3D12::create(QRhi::Flags flags)
         }
         qCDebug(QRHI_LOG_INFO, "Using imported device %p", dev);
     }
+
+    QDxgiVSyncService::instance()->refAdapter(adapterLuid);
 
     if (debugLayer) {
         ID3D12InfoQueue *infoQueue;
@@ -435,6 +442,11 @@ bool QRhiD3D12::create(QRhi::Flags flags)
         return false;
     }
 
+    if (!mipmapGen3D.create(this)) {
+        qWarning("Could not initialize 3D texture mipmap generator");
+        return false;
+    }
+
     const qint32 smallStagingSize = aligned(SMALL_STAGING_AREA_BYTES_PER_FRAME, QD3D12StagingArea::ALIGNMENT);
     for (int i = 0; i < QD3D12_FRAMES_IN_FLIGHT; ++i) {
         if (!smallStagingAreas[i].create(this, smallStagingSize, D3D12_HEAP_TYPE_UPLOAD)) {
@@ -501,6 +513,20 @@ bool QRhiD3D12::create(QRhi::Flags flags)
         caps.textureViewFormat = options3.CastingFullyTypedFormatSupported;
     }
 
+#ifdef QRHI_D3D12_CL5_AVAILABLE
+    D3D12_FEATURE_DATA_D3D12_OPTIONS6 options6 = {};
+    if (SUCCEEDED(dev->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS6, &options6, sizeof(options6)))) {
+        caps.vrs = options6.VariableShadingRateTier != D3D12_VARIABLE_SHADING_RATE_TIER_NOT_SUPPORTED;
+        caps.vrsMap = options6.VariableShadingRateTier == D3D12_VARIABLE_SHADING_RATE_TIER_2;
+        caps.vrsAdditionalRates = options6.AdditionalShadingRatesSupported;
+        shadingRateImageTileSize = options6.ShadingRateImageTileSize;
+    }
+#else
+    caps.vrs = false;
+    caps.vrsMap = false;
+    caps.vrsAdditionalRates = false;
+#endif
+
     deviceLost = false;
     offscreenActive = false;
 
@@ -538,6 +564,7 @@ void QRhiD3D12::destroy()
         smallStagingAreas[i].destroy();
 
     mipmapGen.destroy();
+    mipmapGen3D.destroy();
     samplerMgr.destroy();
     resourcePool.destroy();
     pipelinePool.destroy();
@@ -593,11 +620,93 @@ void QRhiD3D12::destroy()
         dxgiFactory->Release();
         dxgiFactory = nullptr;
     }
+
+    adapterLuid = {};
+    importedDevice = false;
+    importedCommandQueue = false;
+
+    QDxgiVSyncService::instance()->derefAdapter(adapterLuid);
+}
+
+QRhi::AdapterList QRhiD3D12::enumerateAdaptersBeforeCreate(QRhiNativeHandles *nativeHandles) const
+{
+    LUID requestedLuid = {};
+    if (nativeHandles) {
+        QRhiD3D12NativeHandles *h = static_cast<QRhiD3D12NativeHandles *>(nativeHandles);
+        const LUID adapterLuid = { h->adapterLuidLow, h->adapterLuidHigh };
+        if (adapterLuid.LowPart || adapterLuid.HighPart)
+            requestedLuid = adapterLuid;
+    }
+
+    IDXGIFactory2 *dxgi = nullptr;
+    if (FAILED(CreateDXGIFactory2(0, __uuidof(IDXGIFactory2), reinterpret_cast<void **>(&dxgi))))
+        return {};
+
+    QRhi::AdapterList list;
+    IDXGIAdapter1 *adapter;
+    for (int adapterIndex = 0; dxgi->EnumAdapters1(UINT(adapterIndex), &adapter) != DXGI_ERROR_NOT_FOUND; ++adapterIndex) {
+        DXGI_ADAPTER_DESC1 desc;
+        adapter->GetDesc1(&desc);
+        adapter->Release();
+        if (requestedLuid.LowPart || requestedLuid.HighPart) {
+            if (desc.AdapterLuid.LowPart != requestedLuid.LowPart
+                || desc.AdapterLuid.HighPart != requestedLuid.HighPart)
+            {
+                continue;
+            }
+        }
+        QD3D12Adapter *a = new QD3D12Adapter;
+        a->luid = desc.AdapterLuid;
+        QRhiD3D::fillDriverInfo(&a->adapterInfo, desc);
+        list.append(a);
+    }
+
+    dxgi->Release();
+    return list;
+}
+
+QRhiDriverInfo QD3D12Adapter::info() const
+{
+    return adapterInfo;
 }
 
 QList<int> QRhiD3D12::supportedSampleCounts() const
 {
     return { 1, 2, 4, 8 };
+}
+
+QList<QSize> QRhiD3D12::supportedShadingRates(int sampleCount) const
+{
+    QList<QSize> sizes;
+    switch (sampleCount) {
+    case 0:
+    case 1:
+        if (caps.vrsAdditionalRates) {
+            sizes.append(QSize(4, 4));
+            sizes.append(QSize(4, 2));
+            sizes.append(QSize(2, 4));
+        }
+        sizes.append(QSize(2, 2));
+        sizes.append(QSize(2, 1));
+        sizes.append(QSize(1, 2));
+        break;
+    case 2:
+        if (caps.vrsAdditionalRates)
+            sizes.append(QSize(2, 4));
+        sizes.append(QSize(2, 2));
+        sizes.append(QSize(2, 1));
+        sizes.append(QSize(1, 2));
+        break;
+    case 4:
+        sizes.append(QSize(2, 2));
+        sizes.append(QSize(2, 1));
+        sizes.append(QSize(1, 2));
+        break;
+    default:
+        break;
+    }
+    sizes.append(QSize(1, 1));
+    return sizes;
 }
 
 QRhiSwapChain *QRhiD3D12::createSwapChain()
@@ -741,7 +850,7 @@ bool QRhiD3D12::isFeatureSupported(QRhi::Feature feature) const
     case QRhi::RenderToOneDimensionalTexture:
         return true;
     case QRhi::ThreeDimensionalTextureMipmaps:
-        return false; // we generate mipmaps ourselves with compute and this is not implemented
+        return true;
     case QRhi::MultiView:
         return caps.multiView;
     case QRhi::TextureViewFormat:
@@ -750,6 +859,18 @@ bool QRhiD3D12::isFeatureSupported(QRhi::Feature feature) const
         // there is no Multisample Resolve support for depth/stencil formats
         // https://learn.microsoft.com/en-us/windows/win32/direct3ddxgi/hardware-support-for-direct3d-12-1-formats
         return false;
+    case QRhi::VariableRateShading:
+        return caps.vrs;
+    case QRhi::VariableRateShadingMap:
+    case QRhi::VariableRateShadingMapWithTexture:
+        return caps.vrsMap;
+    case QRhi::PerRenderTargetBlending:
+    case QRhi::SampleVariables:
+        return true;
+    case QRhi::InstanceIndexIncludesBaseInstance:
+        return false;
+    case QRhi::DepthClamp:
+        return true;
     }
     return false;
 }
@@ -785,6 +906,8 @@ int QRhiD3D12::resourceLimit(QRhi::ResourceLimit limit) const
         return 32;
     case QRhi::MaxVertexOutputs:
         return 32;
+    case QRhi::ShadingRateImageTileSize:
+        return shadingRateImageTileSize;
     }
     return 0;
 }
@@ -822,6 +945,11 @@ bool QRhiD3D12::makeThreadLocalNativeContextCurrent()
 {
     // not applicable
     return false;
+}
+
+void QRhiD3D12::setQueueSubmitParams(QRhiNativeHandles *)
+{
+    // not applicable
 }
 
 void QRhiD3D12::releaseCachedResources()
@@ -871,6 +999,11 @@ QRhiTextureRenderTarget *QRhiD3D12::createTextureRenderTarget(const QRhiTextureR
     return new QD3D12TextureRenderTarget(this, desc, flags);
 }
 
+QRhiShadingRateMap *QRhiD3D12::createShadingRateMap()
+{
+    return new QD3D12ShadingRateMap(this);
+}
+
 QRhiGraphicsPipeline *QRhiD3D12::createGraphicsPipeline()
 {
     return new QD3D12GraphicsPipeline(this);
@@ -909,6 +1042,9 @@ void QRhiD3D12::setGraphicsPipeline(QRhiCommandBuffer *cb, QRhiGraphicsPipeline 
 
         if (psD->viewInstanceMask)
             cbD->cmdList->SetViewInstanceMask(psD->viewInstanceMask);
+
+        if (cbD->hasCustomScissorSet && !psD->m_flags.testFlag(QRhiGraphicsPipeline::UsesScissor))
+            setDefaultScissor(cbD);
     }
 }
 
@@ -934,20 +1070,37 @@ void QD3D12CommandBuffer::visitUniformBuffer(QD3D12Stage s,
     visitorData.cbufs[s].append({ bufD->handles[rhiD->currentFrameSlot], offset });
 }
 
-void QD3D12CommandBuffer::visitTexture(QD3D12Stage s,
-                                       const QRhiShaderResourceBinding::TextureAndSampler &d,
-                                       int)
+void QD3D12CommandBuffer::visitTextures(QD3D12Stage s,
+                                        const QRhiShaderResourceBinding::TextureAndSampler *d,
+                                        int count,
+                                        int)
 {
-    QD3D12Texture *texD = QRHI_RES(QD3D12Texture, d.tex);
-    visitorData.srvs[s].append(texD->srv);
+    for (int i = 0; i < count; ++i) {
+        QD3D12Texture *texD = QRHI_RES(QD3D12Texture, d[i].tex);
+        visitorData.srvs[s].append(texD->srv);
+    }
 }
 
-void QD3D12CommandBuffer::visitSampler(QD3D12Stage s,
-                                       const QRhiShaderResourceBinding::TextureAndSampler &d,
-                                       int)
+void QD3D12CommandBuffer::visitSamplers(QD3D12Stage s,
+                                        const QRhiShaderResourceBinding::TextureAndSampler *d,
+                                        int count,
+                                        int)
 {
-    QD3D12Sampler *samplerD = QRHI_RES(QD3D12Sampler, d.sampler);
-    visitorData.samplers[s].append(samplerD->lookupOrCreateShaderVisibleDescriptor());
+    if (count == 1) {
+        QD3D12Sampler *samplerD = QRHI_RES(QD3D12Sampler, d[0].sampler);
+        visitorData.samplers[s].append(samplerD->lookupOrCreateShaderVisibleDescriptor());
+        return;
+    }
+
+    // An array of samplers must be backed by consecutive descriptors. The
+    // per-sampler descriptors are scattered in the shader-visible sampler
+    // heap, so get a dedicated run for this combination of samplers instead.
+    // (deduplicated by sampler description, so this is not per srb)
+    QRHI_RES_RHI(QRhiD3D12);
+    QVarLengthArray<Q_D3D12_SAMPLER_DESC, 8> descs;
+    for (int i = 0; i < count; ++i)
+        descs.append({ QRHI_RES(QD3D12Sampler, d[i].sampler)->desc });
+    visitorData.samplers[s].append(rhiD->samplerMgr.getShaderVisibleDescriptors(descs));
 }
 
 void QD3D12CommandBuffer::visitStorageBuffer(QD3D12Stage s,
@@ -990,6 +1143,7 @@ void QD3D12CommandBuffer::visitStorageImage(QD3D12Stage s,
     } else if (is3D) {
         uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE3D;
         uavDesc.Texture3D.MipSlice = UINT(d.level);
+        uavDesc.Texture3D.WSize = UINT(-1);
     } else {
         uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
         uavDesc.Texture2D.MipSlice = UINT(d.level);
@@ -1015,6 +1169,15 @@ void QRhiD3D12::setShaderResources(QRhiCommandBuffer *cb, QRhiShaderResourceBind
 
     QD3D12ShaderResourceBindings *srbD = QRHI_RES(QD3D12ShaderResourceBindings, srb);
 
+    bool pipelineChanged = false;
+    if (gfxPsD) {
+        pipelineChanged = srbD->lastUsedGraphicsPipeline != gfxPsD;
+        srbD->lastUsedGraphicsPipeline = gfxPsD;
+    } else {
+        pipelineChanged = srbD->lastUsedComputePipeline != compPsD;
+        srbD->lastUsedComputePipeline = compPsD;
+    }
+
     for (int i = 0, ie = srbD->m_bindings.size(); i != ie; ++i) {
         const QRhiShaderResourceBinding::Data *b = shaderResourceBindingData(srbD->m_bindings[i]);
         switch (b->type) {
@@ -1023,6 +1186,7 @@ void QRhiD3D12::setShaderResources(QRhiCommandBuffer *cb, QRhiShaderResourceBind
             QD3D12Buffer *bufD = QRHI_RES(QD3D12Buffer, b->u.ubuf.buf);
             Q_ASSERT(bufD->m_usage.testFlag(QRhiBuffer::UniformBuffer));
             Q_ASSERT(bufD->m_type == QRhiBuffer::Dynamic);
+            sanityCheckResourceOwnership(bufD);
             bufD->executeHostWritesForFrameSlot(currentFrameSlot);
         }
             break;
@@ -1038,6 +1202,8 @@ void QRhiD3D12::setShaderResources(QRhiCommandBuffer *cb, QRhiShaderResourceBind
                 // images and samplers, so tex or sampler (but not both) can be
                 // null here.
                 Q_ASSERT(texD || samplerD);
+                sanityCheckResourceOwnership(texD);
+                sanityCheckResourceOwnership(samplerD);
                 if (texD) {
                     UINT state = 0;
                     if (b->stage == QRhiShaderResourceBinding::FragmentStage) {
@@ -1058,6 +1224,7 @@ void QRhiD3D12::setShaderResources(QRhiCommandBuffer *cb, QRhiShaderResourceBind
         case QRhiShaderResourceBinding::ImageLoadStore:
         {
             QD3D12Texture *texD = QRHI_RES(QD3D12Texture, b->u.simage.tex);
+            sanityCheckResourceOwnership(texD);
             if (QD3D12Resource *res = resourcePool.lookupRef(texD->handle)) {
                 if (res->uavUsage) {
                     if (res->uavUsage & QD3D12Resource::UavUsageWrite) {
@@ -1087,6 +1254,7 @@ void QRhiD3D12::setShaderResources(QRhiCommandBuffer *cb, QRhiShaderResourceBind
         case QRhiShaderResourceBinding::BufferLoadStore:
         {
             QD3D12Buffer *bufD = QRHI_RES(QD3D12Buffer, b->u.sbuf.buf);
+            sanityCheckResourceOwnership(bufD);
             Q_ASSERT(bufD->m_usage.testFlag(QRhiBuffer::StorageBuffer));
             Q_ASSERT(bufD->m_type != QRhiBuffer::Dynamic);
             if (QD3D12Resource *res = resourcePool.lookupRef(bufD->handles[0])) {
@@ -1119,7 +1287,7 @@ void QRhiD3D12::setShaderResources(QRhiCommandBuffer *cb, QRhiShaderResourceBind
     const bool srbChanged = gfxPsD ? (cbD->currentGraphicsSrb != srb) : (cbD->currentComputeSrb != srb);
     const bool srbRebuilt = cbD->currentSrbGeneration != srbD->generation;
 
-    if (srbChanged || srbRebuilt || srbD->hasDynamicOffset) {
+    if (pipelineChanged || srbChanged || srbRebuilt || srbD->hasDynamicOffset) {
         const QD3D12ShaderStageData *stageData = gfxPsD ? gfxPsD->stageData.data() : &compPsD->stageData;
 
         // The order of root parameters must match
@@ -1133,8 +1301,8 @@ void QRhiD3D12::setShaderResources(QRhiCommandBuffer *cb, QRhiShaderResourceBind
 
         using namespace std::placeholders;
         visitor.uniformBuffer = std::bind(&QD3D12CommandBuffer::visitUniformBuffer, cbD, _1, _2, _3, _4, dynamicOffsetCount, dynamicOffsets);
-        visitor.texture = std::bind(&QD3D12CommandBuffer::visitTexture, cbD, _1, _2, _3);
-        visitor.sampler = std::bind(&QD3D12CommandBuffer::visitSampler, cbD, _1, _2, _3);
+        visitor.textures = std::bind(&QD3D12CommandBuffer::visitTextures, cbD, _1, _2, _3, _4);
+        visitor.samplers = std::bind(&QD3D12CommandBuffer::visitSamplers, cbD, _1, _2, _3, _4);
         visitor.storageBuffer = std::bind(&QD3D12CommandBuffer::visitStorageBuffer, cbD, _1, _2, _3, _4);
         visitor.storageImage = std::bind(&QD3D12CommandBuffer::visitStorageImage, cbD, _1, _2, _3, _4);
 
@@ -1336,6 +1504,33 @@ void QRhiD3D12::setVertexInput(QRhiCommandBuffer *cb,
     }
 }
 
+void QRhiD3D12::setDefaultScissor(QD3D12CommandBuffer *cbD)
+{
+    cbD->hasCustomScissorSet = false;
+
+    const QSize outputSize = cbD->currentTarget->pixelSize();
+    std::array<float, 4> vp = cbD->currentViewport.viewport();
+    float x = 0, y = 0, w = 0, h = 0;
+
+    if (qFuzzyIsNull(vp[2]) && qFuzzyIsNull(vp[3])) {
+        x = 0;
+        y = 0;
+        w = outputSize.width();
+        h = outputSize.height();
+    } else {
+        // x,y is top-left in D3D12_RECT but bottom-left in QRhiScissor
+        qrhi_toTopLeftRenderTargetRect<Bounded>(outputSize, vp, &x, &y, &w, &h);
+    }
+
+    D3D12_RECT r;
+    r.left = x;
+    r.top = y;
+    // right and bottom are exclusive
+    r.right = x + w;
+    r.bottom = y + h;
+    cbD->cmdList->RSSetScissorRects(1, &r);
+}
+
 void QRhiD3D12::setViewport(QRhiCommandBuffer *cb, const QRhiViewport &viewport)
 {
     QD3D12CommandBuffer *cbD = QRHI_RES(QD3D12CommandBuffer, cb);
@@ -1357,17 +1552,11 @@ void QRhiD3D12::setViewport(QRhiCommandBuffer *cb, const QRhiViewport &viewport)
     v.MaxDepth = viewport.maxDepth();
     cbD->cmdList->RSSetViewports(1, &v);
 
+    cbD->currentViewport = viewport;
     if (cbD->currentGraphicsPipeline
-            && !cbD->currentGraphicsPipeline->flags().testFlag(QRhiGraphicsPipeline::UsesScissor))
+        && !cbD->currentGraphicsPipeline->flags().testFlag(QRhiGraphicsPipeline::UsesScissor))
     {
-        qrhi_toTopLeftRenderTargetRect<Bounded>(outputSize, viewport.viewport(), &x, &y, &w, &h);
-        D3D12_RECT r;
-        r.left = x;
-        r.top = y;
-        // right and bottom are exclusive
-        r.right = x + w;
-        r.bottom = y + h;
-        cbD->cmdList->RSSetScissorRects(1, &r);
+        setDefaultScissor(cbD);
     }
 }
 
@@ -1390,6 +1579,8 @@ void QRhiD3D12::setScissor(QRhiCommandBuffer *cb, const QRhiScissor &scissor)
     r.right = x + w;
     r.bottom = y + h;
     cbD->cmdList->RSSetScissorRects(1, &r);
+
+    cbD->hasCustomScissorSet = true;
 }
 
 void QRhiD3D12::setBlendConstants(QRhiCommandBuffer *cb, const QColor &c)
@@ -1405,6 +1596,44 @@ void QRhiD3D12::setStencilRef(QRhiCommandBuffer *cb, quint32 refValue)
     QD3D12CommandBuffer *cbD = QRHI_RES(QD3D12CommandBuffer, cb);
     Q_ASSERT(cbD->recordingPass == QD3D12CommandBuffer::RenderPass);
     cbD->cmdList->OMSetStencilRef(refValue);
+}
+
+static inline D3D12_SHADING_RATE toD3DShadingRate(const QSize &coarsePixelSize)
+{
+    if (coarsePixelSize == QSize(1, 2))
+        return D3D12_SHADING_RATE_1X2;
+    if (coarsePixelSize == QSize(2, 1))
+        return D3D12_SHADING_RATE_2X1;
+    if (coarsePixelSize == QSize(2, 2))
+        return D3D12_SHADING_RATE_2X2;
+    if (coarsePixelSize == QSize(2, 4))
+        return D3D12_SHADING_RATE_2X4;
+    if (coarsePixelSize == QSize(4, 2))
+        return D3D12_SHADING_RATE_4X2;
+    if (coarsePixelSize == QSize(4, 4))
+        return D3D12_SHADING_RATE_4X4;
+    return D3D12_SHADING_RATE_1X1;
+}
+
+void QRhiD3D12::setShadingRate(QRhiCommandBuffer *cb, const QSize &coarsePixelSize)
+{
+    QD3D12CommandBuffer *cbD = QRHI_RES(QD3D12CommandBuffer, cb);
+    cbD->hasShadingRateSet = false;
+
+#ifdef QRHI_D3D12_CL5_AVAILABLE
+    if (!caps.vrs)
+        return;
+
+    Q_ASSERT(cbD->recordingPass == QD3D12CommandBuffer::RenderPass);
+    const D3D12_SHADING_RATE_COMBINER combiners[] = { D3D12_SHADING_RATE_COMBINER_MAX, D3D12_SHADING_RATE_COMBINER_MAX };
+    cbD->cmdList->RSSetShadingRate(toD3DShadingRate(coarsePixelSize), combiners);
+    if (coarsePixelSize.width() != 1 || coarsePixelSize.height() != 1)
+        cbD->hasShadingRateSet = true;
+#else
+    Q_UNUSED(cb);
+    Q_UNUSED(coarsePixelSize);
+    qWarning("Attempted to set ShadingRate without building Qt against a sufficiently new Windows SDK and d3d12.h. This cannot work.");
+#endif
 }
 
 void QRhiD3D12::draw(QRhiCommandBuffer *cb, quint32 vertexCount,
@@ -1535,8 +1764,13 @@ QRhi::FrameOpResult QRhiD3D12::beginFrame(QRhiSwapChain *swapChain, QRhi::BeginF
     for (QD3D12SwapChain *sc : std::as_const(swapchains))
         sc->waitCommandCompletionForFrameSlot(currentFrameSlot); // note: swapChainD->currentFrameSlot, not sc's
 
-    if (swapChainD->frameLatencyWaitableObject)
-        WaitForSingleObjectEx(swapChainD->frameLatencyWaitableObject, 1000, true);
+    if (swapChainD->frameLatencyWaitableObject) {
+        // only wait when endFrame() called Present(), otherwise this would become a 1 sec timeout
+        if (swapChainD->lastFrameLatencyWaitSlot != currentFrameSlot) {
+            WaitForSingleObjectEx(swapChainD->frameLatencyWaitableObject, 1000, true);
+            swapChainD->lastFrameLatencyWaitSlot = currentFrameSlot;
+        }
+    }
 
     HRESULT hr = cmdAllocators[currentFrameSlot]->Reset();
     if (FAILED(hr)) {
@@ -1599,6 +1833,8 @@ QRhi::FrameOpResult QRhiD3D12::beginFrame(QRhiSwapChain *swapChain, QRhi::BeginF
                                timestampPairStartIndex);
     }
 
+    QDxgiVSyncService::instance()->beginFrame(adapterLuid);
+
     return QRhi::FrameOpSuccess;
 }
 
@@ -1636,7 +1872,7 @@ QRhi::FrameOpResult QRhiD3D12::endFrame(QRhiSwapChain *swapChain, QRhi::EndFrame
                                        timestampPairStartIndex * sizeof(quint64));
     }
 
-    ID3D12GraphicsCommandList1 *cmdList = cbD->cmdList;
+    D3D12GraphicsCommandList *cmdList = cbD->cmdList;
     HRESULT hr = cmdList->Close();
     if (FAILED(hr)) {
         qWarning("Failed to close command list: %s",
@@ -1711,6 +1947,13 @@ QRhi::FrameOpResult QRhiD3D12::beginOffscreenFrame(QRhiCommandBuffer **cb, QRhi:
     for (QD3D12SwapChain *sc : std::as_const(swapchains))
         sc->waitCommandCompletionForFrameSlot(currentFrameSlot); // note: not sc's currentFrameSlot
 
+    HRESULT hr = cmdAllocators[currentFrameSlot]->Reset();
+    if (FAILED(hr)) {
+        qWarning("Failed to reset command allocator: %s",
+                 qPrintable(QSystemError::windowsComString(hr)));
+        return QRhi::FrameOpError;
+    }
+
     if (!offscreenCb[currentFrameSlot])
         offscreenCb[currentFrameSlot] = new QD3D12CommandBuffer(this);
     QD3D12CommandBuffer *cbD = offscreenCb[currentFrameSlot];
@@ -1756,7 +1999,7 @@ QRhi::FrameOpResult QRhiD3D12::endOffscreenFrame(QRhi::EndFrameFlags flags)
                                        timestampPairStartIndex * sizeof(quint64));
     }
 
-    ID3D12GraphicsCommandList1 *cmdList = cbD->cmdList;
+    D3D12GraphicsCommandList *cmdList = cbD->cmdList;
     HRESULT hr = cmdList->Close();
     if (FAILED(hr)) {
         qWarning("Failed to close command list: %s",
@@ -1789,57 +2032,57 @@ QRhi::FrameOpResult QRhiD3D12::endOffscreenFrame(QRhi::EndFrameFlags flags)
 
 QRhi::FrameOpResult QRhiD3D12::finish()
 {
-    if (!inFrame)
-        return QRhi::FrameOpSuccess;
-
     QD3D12CommandBuffer *cbD = nullptr;
-    if (offscreenActive) {
-        Q_ASSERT(!currentSwapChain);
-        cbD = offscreenCb[currentFrameSlot];
-    } else {
-        Q_ASSERT(currentSwapChain);
-        cbD = &currentSwapChain->cbWrapper;
+    if (inFrame) {
+        if (offscreenActive) {
+            Q_ASSERT(!currentSwapChain);
+            cbD = offscreenCb[currentFrameSlot];
+        } else {
+            Q_ASSERT(currentSwapChain);
+            cbD = &currentSwapChain->cbWrapper;
+        }
+        if (!cbD)
+            return QRhi::FrameOpError;
+
+        Q_ASSERT(cbD->recordingPass == QD3D12CommandBuffer::NoPass);
+
+        D3D12GraphicsCommandList *cmdList = cbD->cmdList;
+        HRESULT hr = cmdList->Close();
+        if (FAILED(hr)) {
+            qWarning("Failed to close command list: %s",
+                    qPrintable(QSystemError::windowsComString(hr)));
+            return QRhi::FrameOpError;
+        }
+
+        ID3D12CommandList *execList[] = { cmdList };
+        cmdQueue->ExecuteCommandLists(1, execList);
+
+        releaseQueue.activatePendingDeferredReleaseRequests(currentFrameSlot);
     }
-    if (!cbD)
-        return QRhi::FrameOpError;
-
-    Q_ASSERT(cbD->recordingPass == QD3D12CommandBuffer::NoPass);
-
-    ID3D12GraphicsCommandList1 *cmdList = cbD->cmdList;
-    HRESULT hr = cmdList->Close();
-    if (FAILED(hr)) {
-        qWarning("Failed to close command list: %s",
-                 qPrintable(QSystemError::windowsComString(hr)));
-        return QRhi::FrameOpError;
-    }
-
-    ID3D12CommandList *execList[] = { cmdList };
-    cmdQueue->ExecuteCommandLists(1, execList);
-
-    releaseQueue.activatePendingDeferredReleaseRequests(currentFrameSlot);
 
     // full blocking wait for everything, frame slots do not matter now
     waitGpu();
 
-    hr = cmdAllocators[currentFrameSlot]->Reset();
-    if (FAILED(hr)) {
-        qWarning("Failed to reset command allocator: %s",
-                 qPrintable(QSystemError::windowsComString(hr)));
-        return QRhi::FrameOpError;
+    if (inFrame) {
+        HRESULT hr = cmdAllocators[currentFrameSlot]->Reset();
+        if (FAILED(hr)) {
+            qWarning("Failed to reset command allocator: %s",
+                    qPrintable(QSystemError::windowsComString(hr)));
+            return QRhi::FrameOpError;
+        }
+
+        if (!startCommandListForCurrentFrameSlot(&cbD->cmdList))
+            return QRhi::FrameOpError;
+
+        cbD->resetState();
+
+        shaderVisibleCbvSrvUavHeap.perFrameHeapSlice[currentFrameSlot].head = 0;
+        smallStagingAreas[currentFrameSlot].head = 0;
+
+        bindShaderVisibleHeaps(cbD);
     }
 
-    if (!startCommandListForCurrentFrameSlot(&cmdList))
-        return QRhi::FrameOpError;
-
-    cbD->resetState();
-
-    shaderVisibleCbvSrvUavHeap.perFrameHeapSlice[currentFrameSlot].head = 0;
-    smallStagingAreas[currentFrameSlot].head = 0;
-
-    bindShaderVisibleHeaps(cbD);
-
-    releaseQueue.executeDeferredReleases(currentFrameSlot);
-
+    releaseQueue.releaseAll();
     finishActiveReadbacks(true);
 
     return QRhi::FrameOpSuccess;
@@ -1931,7 +2174,31 @@ void QRhiD3D12::beginPass(QRhiCommandBuffer *cb,
     cbD->recordingPass = QD3D12CommandBuffer::RenderPass;
     cbD->currentTarget = rt;
 
+    bool hasShadingRateMapSet = false;
+#ifdef QRHI_D3D12_CL5_AVAILABLE
+    if (rtD->rp->hasShadingRateMap) {
+        cbD->setShadingRate(QSize(1, 1));
+        QD3D12ShadingRateMap *rateMapD = rt->resourceType() == QRhiRenderTarget::TextureRenderTarget
+            ? QRHI_RES(QD3D12ShadingRateMap, QRHI_RES(QD3D12TextureRenderTarget, rt)->m_desc.shadingRateMap())
+            : QRHI_RES(QD3D12ShadingRateMap, QRHI_RES(QD3D12SwapChainRenderTarget, rt)->swapChain()->shadingRateMap());
+        if (QD3D12Resource *res = resourcePool.lookupRef(rateMapD->handle)) {
+            barrierGen.addTransitionBarrier(rateMapD->handle, D3D12_RESOURCE_STATE_SHADING_RATE_SOURCE);
+            barrierGen.enqueueBufferedTransitionBarriers(cbD);
+            cbD->cmdList->RSSetShadingRateImage(res->resource);
+            hasShadingRateMapSet = true;
+        }
+    } else if (cbD->hasShadingRateMapSet) {
+        cbD->cmdList->RSSetShadingRateImage(nullptr);
+        cbD->setShadingRate(QSize(1, 1));
+    } else if (cbD->hasShadingRateSet) {
+        cbD->setShadingRate(QSize(1, 1));
+    }
+#endif
+
     cbD->resetPerPassState();
+
+    // shading rate tracking is reset in resetPerPassState(), sync what we did just above
+    cbD->hasShadingRateMapSet = hasShadingRateMapSet;
 }
 
 void QRhiD3D12::endPass(QRhiCommandBuffer *cb, QRhiResourceUpdateBatch *resourceUpdates)
@@ -2171,7 +2438,7 @@ void QD3D12CpuDescriptorPool::destroy()
     static bool leakCheck = qEnvironmentVariableIntValue("QT_RHI_LEAK_CHECK");
 #endif
     if (leakCheck) {
-        for (HeapWithMap &heap : heaps) {
+        for (const HeapWithMap &heap : std::as_const(heaps)) {
             const int leakedDescriptorCount = heap.map.count(true);
             if (leakedDescriptorCount > 0) {
                 qWarning("QD3D12CpuDescriptorPool::destroy(): "
@@ -2602,7 +2869,7 @@ void QD3D12ShaderVisibleDescriptorHeap::destroyWithDeferredRelease(QD3D12Release
     heap.destroyWithDeferredRelease(releaseQueue);
 }
 
-static inline QPair<int, int> mapBinding(int binding, const QShader::NativeResourceBindingMap &map)
+static inline std::pair<int, int> mapBinding(int binding, const QShader::NativeResourceBindingMap &map)
 {
     if (map.isEmpty())
         return { binding, binding }; // assume 1:1 mapping
@@ -2644,32 +2911,26 @@ void QD3D12ShaderResourceVisitor::visit()
                 Q_ASSERT(bd->u.stex.count > 0);
                 const int textureBaseShaderRegister = mapBinding(bd->binding, sd->nativeResourceBindingMap).first;
                 const int samplerBaseShaderRegister = mapBinding(bd->binding, sd->nativeResourceBindingMap).second;
-                for (int i = 0; i < bd->u.stex.count; ++i) {
-                    if (textureBaseShaderRegister >= 0 && texture)
-                        texture(sd->stage, bd->u.stex.texSamplers[i], textureBaseShaderRegister + i);
-                    if (samplerBaseShaderRegister >= 0 && sampler)
-                        sampler(sd->stage, bd->u.stex.texSamplers[i], samplerBaseShaderRegister + i);
-                }
+                if (textureBaseShaderRegister >= 0 && textures)
+                    textures(sd->stage, bd->u.stex.texSamplers, bd->u.stex.count, textureBaseShaderRegister);
+                if (samplerBaseShaderRegister >= 0 && samplers)
+                    samplers(sd->stage, bd->u.stex.texSamplers, bd->u.stex.count, samplerBaseShaderRegister);
             }
                 break;
             case QRhiShaderResourceBinding::Texture:
             {
                 Q_ASSERT(bd->u.stex.count > 0);
                 const int baseShaderRegister = mapBinding(bd->binding, sd->nativeResourceBindingMap).first;
-                if (baseShaderRegister >= 0 && texture) {
-                    for (int i = 0; i < bd->u.stex.count; ++i)
-                        texture(sd->stage, bd->u.stex.texSamplers[i], baseShaderRegister + i);
-                }
+                if (baseShaderRegister >= 0 && textures)
+                    textures(sd->stage, bd->u.stex.texSamplers, bd->u.stex.count, baseShaderRegister);
             }
                 break;
             case QRhiShaderResourceBinding::Sampler:
             {
                 Q_ASSERT(bd->u.stex.count > 0);
                 const int baseShaderRegister = mapBinding(bd->binding, sd->nativeResourceBindingMap).first;
-                if (baseShaderRegister >= 0 && sampler) {
-                    for (int i = 0; i < bd->u.stex.count; ++i)
-                        sampler(sd->stage, bd->u.stex.texSamplers[i], baseShaderRegister + i);
-                }
+                if (baseShaderRegister >= 0 && samplers)
+                    samplers(sd->stage, bd->u.stex.texSamplers, bd->u.stex.count, baseShaderRegister);
             }
                 break;
             case QRhiShaderResourceBinding::ImageLoad:
@@ -2761,6 +3022,39 @@ QD3D12Descriptor QD3D12SamplerManager::getShaderVisibleDescriptor(const D3D12_SA
     return descriptor;
 }
 
+QD3D12Descriptor QD3D12SamplerManager::getShaderVisibleDescriptors(const QVarLengthArray<Q_D3D12_SAMPLER_DESC, 8> &descs)
+{
+    // Deliberately keyed on the sampler descriptions, not on the QRhiSampler
+    // objects: an array of samplers with the same combination of filtering and
+    // addressing modes can share one descriptor run, however many
+    // QRhiShaderResourceBindings reference it.
+    auto it = gpuArrayMap.constFind({ descs });
+    if (it != gpuArrayMap.cend())
+        return *it;
+
+    const quint32 count = quint32(descs.count());
+    QD3D12Descriptor startDescriptor = shaderVisibleSamplerHeap.heap.get(count);
+    if (startDescriptor.isValid()) {
+        for (quint32 i = 0; i < count; ++i) {
+            device->CreateSampler(&descs[int(i)].desc,
+                                  shaderVisibleSamplerHeap.heap.incremented(startDescriptor, i).cpuHandle);
+        }
+        gpuArrayMap.insert({ descs }, startDescriptor);
+    } else {
+        // Not inserting anything into the map on failure, so this is retried
+        // (and warns again) on every setShaderResources() with this binding.
+        // Same as the single sampler case above, and preferable to caching the
+        // invalid descriptor, which would keep binding a null descriptor table
+        // without saying anything about it.
+        qWarning("Out of shader-visible SAMPLER descriptor heap space when reserving"
+                 " %u consecutive descriptors for a sampler array, maximum number of"
+                 " sampler descriptors is %u",
+                 count, shaderVisibleSamplerHeap.heap.capacity);
+    }
+
+    return startDescriptor;
+}
+
 bool QD3D12MipmapGenerator::create(QRhiD3D12 *rhiD)
 {
     this->rhiD = rhiD;
@@ -2792,11 +3086,10 @@ bool QD3D12MipmapGenerator::create(QRhiD3D12 *rhiD)
 
     // s0
     D3D12_STATIC_SAMPLER_DESC samplerDesc = {};
-    samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    samplerDesc.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
     samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
     samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    samplerDesc.MaxLOD = 10000.0f;
     samplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
     D3D12_VERSIONED_ROOT_SIGNATURE_DESC rsDesc = {};
@@ -2889,8 +3182,7 @@ void QD3D12MipmapGenerator::generate(QD3D12CommandBuffer *cbD, const QD3D12Objec
     const quint32 layerCount = isCubeOrArray ? res->desc.DepthOrArraySize : 1;
 
     if (is3D) {
-        // ### needs its own shader and maybe a different solution
-        qWarning("3D texture mipmapping is not implemented for D3D12 atm");
+        qWarning("2D mipmap generator invoked for 3D texture, this should not happen");
         return;
     }
 
@@ -2969,18 +3261,12 @@ void QD3D12MipmapGenerator::generate(QD3D12CommandBuffer *cbD, const QD3D12Objec
             srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
             if (isCubeOrArray) {
                 srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
-                srvDesc.Texture2DArray.MostDetailedMip = level;
-                srvDesc.Texture2DArray.MipLevels = 1;
+                srvDesc.Texture2DArray.MipLevels = res->desc.MipLevels;
                 srvDesc.Texture2DArray.FirstArraySlice = layer;
                 srvDesc.Texture2DArray.ArraySize = 1;
-            } else if (is3D) {
-                srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
-                srvDesc.Texture3D.MostDetailedMip = level;
-                srvDesc.Texture3D.MipLevels = 1;
             } else {
                 srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-                srvDesc.Texture2D.MostDetailedMip = level;
-                srvDesc.Texture2D.MipLevels = 1;
+                srvDesc.Texture2D.MipLevels = res->desc.MipLevels;
             }
             rhiD->dev->CreateShaderResourceView(res->resource, &srvDesc, srv.cpuHandle);
             cbD->cmdList->SetComputeRootDescriptorTable(1, srv.gpuHandle);
@@ -2997,11 +3283,6 @@ void QD3D12MipmapGenerator::generate(QD3D12CommandBuffer *cbD, const QD3D12Objec
                     uavDesc.Texture2DArray.MipSlice = uavMipLevel;
                     uavDesc.Texture2DArray.FirstArraySlice = layer;
                     uavDesc.Texture2DArray.ArraySize = 1;
-                } else if (is3D) {
-                    uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE3D;
-                    uavDesc.Texture3D.MipSlice = uavMipLevel;
-                    uavDesc.Texture3D.FirstWSlice = 0; // depth etc. not implemented yet
-                    uavDesc.Texture3D.WSize = 1;
                 } else {
                     uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
                     uavDesc.Texture2D.MipSlice = uavMipLevel;
@@ -3020,6 +3301,218 @@ void QD3D12MipmapGenerator::generate(QD3D12CommandBuffer *cbD, const QD3D12Objec
 
             level += numGenMips;
         }
+    }
+
+    if (ownStagingArea.has_value())
+        ownStagingArea->destroyWithDeferredRelease(&rhiD->releaseQueue);
+}
+
+bool QD3D12MipmapGenerator3D::create(QRhiD3D12 *rhiD)
+{
+    this->rhiD = rhiD;
+
+    D3D12_ROOT_PARAMETER1 rootParams[3] = {};
+    D3D12_DESCRIPTOR_RANGE1 descriptorRanges[2] = {};
+
+    // b0
+    rootParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+    rootParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParams[0].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC;
+
+    // t0
+    descriptorRanges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    descriptorRanges[0].NumDescriptors = 1;
+    descriptorRanges[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_VOLATILE;
+    rootParams[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParams[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParams[1].DescriptorTable.NumDescriptorRanges = 1;
+    rootParams[1].DescriptorTable.pDescriptorRanges = &descriptorRanges[0];
+
+    // u0
+    descriptorRanges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+    descriptorRanges[1].NumDescriptors = 1;
+    rootParams[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    rootParams[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    rootParams[2].DescriptorTable.NumDescriptorRanges = 1;
+    rootParams[2].DescriptorTable.pDescriptorRanges = &descriptorRanges[1];
+
+    // s0
+    D3D12_STATIC_SAMPLER_DESC samplerDesc = {};
+    samplerDesc.Filter = D3D12_FILTER_MIN_MAG_LINEAR_MIP_POINT;
+    samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    samplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+    D3D12_VERSIONED_ROOT_SIGNATURE_DESC rsDesc = {};
+    rsDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
+    rsDesc.Desc_1_1.NumParameters = 3;
+    rsDesc.Desc_1_1.pParameters = rootParams;
+    rsDesc.Desc_1_1.NumStaticSamplers = 1;
+    rsDesc.Desc_1_1.pStaticSamplers = &samplerDesc;
+
+    ID3DBlob *signature = nullptr;
+    HRESULT hr = D3D12SerializeVersionedRootSignature(&rsDesc, &signature, nullptr);
+    if (FAILED(hr)) {
+        qWarning("Failed to serialize root signature: %s", qPrintable(QSystemError::windowsComString(hr)));
+        return false;
+    }
+    ID3D12RootSignature *rootSig = nullptr;
+    hr = rhiD->dev->CreateRootSignature(0,
+                                        signature->GetBufferPointer(),
+                                        signature->GetBufferSize(),
+                                        __uuidof(ID3D12RootSignature),
+                                        reinterpret_cast<void **>(&rootSig));
+    signature->Release();
+    if (FAILED(hr)) {
+        qWarning("Failed to create root signature: %s",
+                 qPrintable(QSystemError::windowsComString(hr)));
+        return false;
+    }
+
+    rootSigHandle = QD3D12RootSignature::addToPool(&rhiD->rootSignaturePool, rootSig);
+
+    D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
+    psoDesc.pRootSignature = rootSig;
+    psoDesc.CS.pShaderBytecode = g_csMipmap3D;
+    psoDesc.CS.BytecodeLength = sizeof(g_csMipmap3D);
+    ID3D12PipelineState *pso = nullptr;
+    hr = rhiD->dev->CreateComputePipelineState(&psoDesc,
+                                               __uuidof(ID3D12PipelineState),
+                                               reinterpret_cast<void **>(&pso));
+    if (FAILED(hr)) {
+        qWarning("Failed to create compute pipeline state: %s",
+                 qPrintable(QSystemError::windowsComString(hr)));
+        rhiD->rootSignaturePool.remove(rootSigHandle);
+        rootSigHandle = {};
+        return false;
+    }
+
+    pipelineHandle = QD3D12Pipeline::addToPool(&rhiD->pipelinePool, QD3D12Pipeline::Compute, pso);
+
+    return true;
+}
+
+void QD3D12MipmapGenerator3D::destroy()
+{
+    rhiD->pipelinePool.remove(pipelineHandle);
+    pipelineHandle = {};
+    rhiD->rootSignaturePool.remove(rootSigHandle);
+    rootSigHandle = {};
+}
+
+void QD3D12MipmapGenerator3D::generate(QD3D12CommandBuffer *cbD, const QD3D12ObjectHandle &textureHandle)
+{
+    QD3D12Pipeline *pipeline = rhiD->pipelinePool.lookupRef(pipelineHandle);
+    if (!pipeline)
+        return;
+    QD3D12RootSignature *rootSig = rhiD->rootSignaturePool.lookupRef(rootSigHandle);
+    if (!rootSig)
+        return;
+    QD3D12Resource *res = rhiD->resourcePool.lookupRef(textureHandle);
+    if (!res)
+        return;
+
+    const quint32 mipLevelCount = res->desc.MipLevels;
+    if (mipLevelCount < 2)
+        return;
+
+    const bool is3D = res->desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D;
+    if (!is3D) {
+        qWarning("3D mipmap generator invoked for non-3D texture, this should not happen");
+        return;
+    }
+
+    rhiD->barrierGen.addTransitionBarrier(textureHandle, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    rhiD->barrierGen.enqueueBufferedTransitionBarriers(cbD);
+
+    cbD->cmdList->SetPipelineState(pipeline->pso);
+    cbD->cmdList->SetComputeRootSignature(rootSig->rootSig);
+
+    const quint32 descriptorByteSize = rhiD->shaderVisibleCbvSrvUavHeap.perFrameHeapSlice[rhiD->currentFrameSlot].descriptorByteSize;
+
+    struct CBufData {
+        float texelWidth;
+        float texelHeight;
+        float texelDepth;
+        quint32 srcMipLevel;
+    };
+
+    const quint32 allocSize = QD3D12StagingArea::allocSizeForArray(sizeof(CBufData), mipLevelCount);
+    std::optional<QD3D12StagingArea> ownStagingArea;
+    if (rhiD->smallStagingAreas[rhiD->currentFrameSlot].remainingCapacity() < allocSize) {
+        ownStagingArea = QD3D12StagingArea();
+        if (!ownStagingArea->create(rhiD, allocSize, D3D12_HEAP_TYPE_UPLOAD)) {
+            qWarning("Could not create staging area for mipmap generation");
+            return;
+        }
+    }
+    QD3D12StagingArea *workArea = ownStagingArea.has_value()
+            ? &ownStagingArea.value()
+            : &rhiD->smallStagingAreas[rhiD->currentFrameSlot];
+
+    bool gotNewHeap = false;
+    if (!rhiD->ensureShaderVisibleDescriptorHeapCapacity(&rhiD->shaderVisibleCbvSrvUavHeap,
+                                                         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                                                         rhiD->currentFrameSlot,
+                                                         (1 + 1) * mipLevelCount, // 1 SRV + 1 UAV
+                                                         &gotNewHeap))
+    {
+        qWarning("Could not ensure enough space in descriptor heap for mipmap generation");
+        return;
+    }
+    if (gotNewHeap)
+        rhiD->bindShaderVisibleHeaps(cbD);
+
+    for (quint32 level = 0; level < mipLevelCount; ++level) {
+        UINT subresource = calcSubresource(level, 0u, res->desc.MipLevels);
+        rhiD->barrierGen.enqueueSubresourceTransitionBarrier(cbD, textureHandle, subresource,
+                                                                D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                                                                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+        quint32 levelPlusOneMipWidth = qMax<quint32>(1, res->desc.Width >> (level + 1));
+        quint32 levelPlusOneMipHeight = qMax<quint32>(1, res->desc.Height >> (level + 1));
+        quint32 levelPlusOneMipDepth = qMax<quint32>(1, res->desc.DepthOrArraySize >> (level + 1));
+
+        CBufData cbufData = {
+            1.0f / float(levelPlusOneMipWidth),
+            1.0f / float(levelPlusOneMipHeight),
+            1.0f / float(levelPlusOneMipDepth),
+            quint32(level)
+        };
+
+        QD3D12StagingArea::Allocation cbuf = workArea->get(sizeof(cbufData));
+        memcpy(cbuf.p, &cbufData, sizeof(cbufData));
+        cbD->cmdList->SetComputeRootConstantBufferView(0, cbuf.gpuAddr);
+
+        QD3D12Descriptor srv = rhiD->shaderVisibleCbvSrvUavHeap.perFrameHeapSlice[rhiD->currentFrameSlot].get(1);
+        D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+        srvDesc.Format = res->desc.Format;
+        srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
+        srvDesc.Texture3D.MipLevels = res->desc.MipLevels;
+
+        rhiD->dev->CreateShaderResourceView(res->resource, &srvDesc, srv.cpuHandle);
+        cbD->cmdList->SetComputeRootDescriptorTable(1, srv.gpuHandle);
+
+        QD3D12Descriptor uavStart = rhiD->shaderVisibleCbvSrvUavHeap.perFrameHeapSlice[rhiD->currentFrameSlot].get(1);
+        D3D12_CPU_DESCRIPTOR_HANDLE uavCpuHandle = uavStart.cpuHandle;
+        const quint32 uavMipLevel = qMin(level + 1u, res->desc.MipLevels - 1u);
+        D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+        uavDesc.Format = res->desc.Format;
+        uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE3D;
+        uavDesc.Texture3D.MipSlice = uavMipLevel;
+        uavDesc.Texture3D.WSize = UINT(-1);
+        rhiD->dev->CreateUnorderedAccessView(res->resource, nullptr, &uavDesc, uavCpuHandle);
+        uavCpuHandle.ptr += descriptorByteSize;
+        cbD->cmdList->SetComputeRootDescriptorTable(2, uavStart.gpuHandle);
+
+        cbD->cmdList->Dispatch(levelPlusOneMipWidth, levelPlusOneMipHeight, levelPlusOneMipDepth);
+
+        rhiD->barrierGen.enqueueUavBarrier(cbD, textureHandle);
+        rhiD->barrierGen.enqueueSubresourceTransitionBarrier(cbD, textureHandle, subresource,
+                                                                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                                                                D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     }
 
     if (ownStagingArea.has_value())
@@ -3143,7 +3636,7 @@ DXGI_SAMPLE_DESC QRhiD3D12::effectiveSampleDesc(int sampleCount, DXGI_FORMAT for
     return desc;
 }
 
-bool QRhiD3D12::startCommandListForCurrentFrameSlot(ID3D12GraphicsCommandList1 **cmdList)
+bool QRhiD3D12::startCommandListForCurrentFrameSlot(D3D12GraphicsCommandList **cmdList)
 {
     ID3D12CommandAllocator *cmdAlloc = cmdAllocators[currentFrameSlot];
     if (!*cmdList) {
@@ -3151,7 +3644,7 @@ bool QRhiD3D12::startCommandListForCurrentFrameSlot(ID3D12GraphicsCommandList1 *
                                             D3D12_COMMAND_LIST_TYPE_DIRECT,
                                             cmdAlloc,
                                             nullptr,
-                                            __uuidof(ID3D12GraphicsCommandList1),
+                                            __uuidof(D3D12GraphicsCommandList),
                                             reinterpret_cast<void **>(cmdList));
         if (FAILED(hr)) {
             qWarning("Failed to create command list: %s", qPrintable(QSystemError::windowsComString(hr)));
@@ -3380,6 +3873,7 @@ void QRhiD3D12::enqueueResourceUpdates(QD3D12CommandBuffer *cbD, QRhiResourceUpd
                             QSize size = subresDesc.sourceSize().isEmpty() ? img.size() : subresDesc.sourceSize();
                             size.setWidth(qMin(size.width(), img.width() - srcPos.x()));
                             size.setHeight(qMin(size.height(), img.height() - srcPos.y()));
+                            size = clampedSubResourceUploadSize(size, dstPos, level, texD->m_pixelSize);
 
                             footprint.Width = size.width();
                             footprint.Height = size.height();
@@ -3518,6 +4012,7 @@ void QRhiD3D12::enqueueResourceUpdates(QD3D12CommandBuffer *cbD, QRhiResourceUpd
             readback.result = u.result;
 
             QD3D12ObjectHandle srcHandle;
+            QRect rect;
             bool is3D = false;
             if (u.rb.texture()) {
                 QD3D12Texture *texD = QRHI_RES(QD3D12Texture, u.rb.texture());
@@ -3526,17 +4021,24 @@ void QRhiD3D12::enqueueResourceUpdates(QD3D12CommandBuffer *cbD, QRhiResourceUpd
                     continue;
                 }
                 is3D = texD->m_flags.testFlag(QRhiTexture::ThreeDimensional);
-                readback.pixelSize = q->sizeForMipLevel(u.rb.level(), texD->m_pixelSize);
+                if (u.rb.rect().isValid())
+                    rect = u.rb.rect();
+                else
+                    rect = QRect({0, 0}, q->sizeForMipLevel(u.rb.level(), texD->m_pixelSize));
                 readback.format = texD->m_format;
                 srcHandle = texD->handle;
             } else {
                 Q_ASSERT(currentSwapChain);
-                readback.pixelSize = currentSwapChain->pixelSize;
+                if (u.rb.rect().isValid())
+                    rect = u.rb.rect();
+                else
+                    rect = QRect({0, 0}, currentSwapChain->pixelSize);
                 readback.format = swapchainReadbackTextureFormat(currentSwapChain->colorFormat, nullptr);
                 if (readback.format == QRhiTexture::UnknownFormat)
                     continue;
                 srcHandle = currentSwapChain->colorBuffers[currentSwapChain->currentBackBufferIndex];
             }
+            readback.pixelSize = rect.size();
 
             textureFormatInfo(readback.format,
                               readback.pixelSize,
@@ -3589,18 +4091,23 @@ void QRhiD3D12::enqueueResourceUpdates(QD3D12CommandBuffer *cbD, QRhiResourceUpd
             src.SubresourceIndex = subresource;
 
             D3D12_BOX srcBox = {};
-            if (is3D) {
-                srcBox.front = UINT(u.rb.layer());
-                srcBox.back = srcBox.front + 1;
-                srcBox.right = readback.pixelSize.width(); // exclusive
-                srcBox.bottom = readback.pixelSize.height();
-            }
-            cbD->cmdList->CopyTextureRegion(&dst, 0, 0, 0, &src, is3D ? &srcBox : nullptr);
+            srcBox.left = UINT(rect.left());
+            srcBox.top = UINT(rect.top());
+            srcBox.front = is3D ? UINT(u.rb.layer()) : 0u;
+            // back, right, bottom are exclusive
+            srcBox.right = srcBox.left + UINT(rect.width());
+            srcBox.bottom = srcBox.top + UINT(rect.height());
+            srcBox.back = srcBox.front + 1;
+
+            cbD->cmdList->CopyTextureRegion(&dst, 0, 0, 0, &src, &srcBox);
             activeReadbacks.append(readback);
         } else if (u.type == QRhiResourceUpdateBatchPrivate::TextureOp::GenMips) {
             QD3D12Texture *texD = QRHI_RES(QD3D12Texture, u.dst);
             Q_ASSERT(texD->flags().testFlag(QRhiTexture::UsedWithGenerateMips));
-            mipmapGen.generate(cbD, texD->handle);
+            if (texD->flags().testFlag(QRhiTexture::ThreeDimensional))
+                mipmapGen3D.generate(cbD, texD->handle);
+            else
+                mipmapGen.generate(cbD, texD->handle);
         }
     }
 
@@ -3633,7 +4140,7 @@ void QRhiD3D12::finishActiveReadbacks(bool forced)
             if (readback.result->completed)
                 completedCallbacks.append(readback.result->completed);
 
-            activeReadbacks.removeLast();
+            activeReadbacks.remove(i);
         }
     }
 
@@ -3876,6 +4383,10 @@ static inline DXGI_FORMAT toD3DTextureFormat(QRhiTexture::Format format, QRhiTex
         return srgb ? DXGI_FORMAT_B8G8R8A8_UNORM_SRGB : DXGI_FORMAT_B8G8R8A8_UNORM;
     case QRhiTexture::R8:
         return DXGI_FORMAT_R8_UNORM;
+    case QRhiTexture::R8SI:
+        return DXGI_FORMAT_R8_SINT;
+    case QRhiTexture::R8UI:
+        return DXGI_FORMAT_R8_UINT;
     case QRhiTexture::RG8:
         return DXGI_FORMAT_R8G8_UNORM;
     case QRhiTexture::R16:
@@ -3897,6 +4408,19 @@ static inline DXGI_FORMAT toD3DTextureFormat(QRhiTexture::Format format, QRhiTex
     case QRhiTexture::RGB10A2:
         return DXGI_FORMAT_R10G10B10A2_UNORM;
 
+    case QRhiTexture::R32SI:
+        return DXGI_FORMAT_R32_SINT;
+    case QRhiTexture::R32UI:
+        return DXGI_FORMAT_R32_UINT;
+    case QRhiTexture::RG32SI:
+        return DXGI_FORMAT_R32G32_SINT;
+    case QRhiTexture::RG32UI:
+        return DXGI_FORMAT_R32G32_UINT;
+    case QRhiTexture::RGBA32SI:
+        return DXGI_FORMAT_R32G32B32A32_SINT;
+    case QRhiTexture::RGBA32UI:
+        return DXGI_FORMAT_R32G32B32A32_UINT;
+
     case QRhiTexture::D16:
         return DXGI_FORMAT_R16_TYPELESS;
     case QRhiTexture::D24:
@@ -3905,6 +4429,8 @@ static inline DXGI_FORMAT toD3DTextureFormat(QRhiTexture::Format format, QRhiTex
         return DXGI_FORMAT_R24G8_TYPELESS;
     case QRhiTexture::D32F:
         return DXGI_FORMAT_R32_TYPELESS;
+    case QRhiTexture::Format::D32FS8:
+        return DXGI_FORMAT_R32G8X24_TYPELESS;
 
     case QRhiTexture::BC1:
         return srgb ? DXGI_FORMAT_BC1_UNORM_SRGB : DXGI_FORMAT_BC1_UNORM;
@@ -4142,6 +4668,8 @@ static inline DXGI_FORMAT toD3DDepthTextureSRVFormat(QRhiTexture::Format format)
         return DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
     case QRhiTexture::Format::D32F:
         return DXGI_FORMAT_R32_FLOAT;
+    case QRhiTexture::Format::D32FS8:
+        return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
     default:
         break;
     }
@@ -4160,6 +4688,8 @@ static inline DXGI_FORMAT toD3DDepthTextureDSVFormat(QRhiTexture::Format format)
         return DXGI_FORMAT_D24_UNORM_S8_UINT;
     case QRhiTexture::Format::D32F:
         return DXGI_FORMAT_D32_FLOAT;
+    case QRhiTexture::Format::D32FS8:
+        return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
     default:
         break;
     }
@@ -4173,6 +4703,7 @@ static inline bool isDepthTextureFormat(QRhiTexture::Format format)
     case QRhiTexture::Format::D24:
     case QRhiTexture::Format::D24S8:
     case QRhiTexture::Format::D32F:
+    case QRhiTexture::Format::D32FS8:
         return true;
     default:
         return false;
@@ -4183,6 +4714,10 @@ bool QD3D12Texture::prepareCreate(QSize *adjustedSize)
 {
     if (!handle.isNull())
         destroy();
+
+    QRHI_RES_RHI(QRhiD3D12);
+    if (!rhiD->isTextureFormatSupported(m_format, m_flags))
+        return false;
 
     const bool isDepth = isDepthTextureFormat(m_format);
     const bool isCube = m_flags.testFlag(CubeMap);
@@ -4215,7 +4750,6 @@ bool QD3D12Texture::prepareCreate(QSize *adjustedSize)
             srvFormat = toD3DTextureFormat(m_readViewFormat.format, m_readViewFormat.srgb ? sRGB : Flags());
     }
 
-    QRHI_RES_RHI(QRhiD3D12);
     mipLevelCount = uint(hasMipMaps ? rhiD->q->mipLevelsForSize(size) : 1);
     sampleDesc = rhiD->effectiveSampleDesc(m_sampleCount, dxgiFormat);
     if (sampleDesc.Count > 1) {
@@ -4591,6 +5125,34 @@ QD3D12Descriptor QD3D12Sampler::lookupOrCreateShaderVisibleDescriptor()
     return shaderVisibleDescriptor;
 }
 
+QD3D12ShadingRateMap::QD3D12ShadingRateMap(QRhiImplementation *rhi)
+    : QRhiShadingRateMap(rhi)
+{
+}
+
+QD3D12ShadingRateMap::~QD3D12ShadingRateMap()
+{
+    destroy();
+}
+
+void QD3D12ShadingRateMap::destroy()
+{
+    if (handle.isNull())
+        return;
+
+    handle = {};
+}
+
+bool QD3D12ShadingRateMap::createFrom(QRhiTexture *src)
+{
+    if (!handle.isNull())
+        destroy();
+
+    handle = QRHI_RES(QD3D12Texture, src)->handle;
+
+    return true;
+}
+
 QD3D12TextureRenderTarget::QD3D12TextureRenderTarget(QRhiImplementation *rhi,
                                                      const QRhiTextureRenderTargetDescription &desc,
                                                      Flags flags)
@@ -4654,6 +5216,8 @@ QRhiRenderPassDescriptor *QD3D12TextureRenderTarget::newCompatibleRenderPassDesc
         rpD->hasDepthStencil = true;
         rpD->dsFormat = toD3DDepthTextureDSVFormat(depthTexD->format()); // cannot be a typeless format
     }
+
+    rpD->hasShadingRateMap = m_desc.shadingRateMap() != nullptr;
 
     rpD->updateSerializedFormat();
 
@@ -4913,16 +5477,20 @@ void QD3D12ShaderResourceBindings::visitUniformBuffer(QD3D12Stage s,
     visitorData.cbParams[s].append(rootParam);
 }
 
-void QD3D12ShaderResourceBindings::visitTexture(QD3D12Stage s,
-                                                const QRhiShaderResourceBinding::TextureAndSampler &,
-                                                int shaderRegister)
+void QD3D12ShaderResourceBindings::visitTextures(QD3D12Stage s,
+                                                 const QRhiShaderResourceBinding::TextureAndSampler *,
+                                                 int count,
+                                                 int baseShaderRegister)
 {
+    // An array of textures is one range of count descriptors, not count ranges
+    // of one: the shader declares the array as a single range and D3D12
+    // rejects the pipeline unless the range is bound in full.
     D3D12_DESCRIPTOR_RANGE1 range = {};
     range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    range.NumDescriptors = 1;
-    range.BaseShaderRegister = shaderRegister;
+    range.NumDescriptors = UINT(count);
+    range.BaseShaderRegister = baseShaderRegister;
     range.OffsetInDescriptorsFromTableStart = visitorData.currentSrvRangeOffset[s];
-    visitorData.currentSrvRangeOffset[s] += 1;
+    visitorData.currentSrvRangeOffset[s] += UINT(count);
     visitorData.srvRanges[s].append(range);
     if (visitorData.srvRanges[s].count() == 1) {
         visitorData.srvTables[s].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
@@ -4930,22 +5498,26 @@ void QD3D12ShaderResourceBindings::visitTexture(QD3D12Stage s,
     }
 }
 
-void QD3D12ShaderResourceBindings::visitSampler(QD3D12Stage s,
-                                                const QRhiShaderResourceBinding::TextureAndSampler &,
-                                                int shaderRegister)
+void QD3D12ShaderResourceBindings::visitSamplers(QD3D12Stage s,
+                                                 const QRhiShaderResourceBinding::TextureAndSampler *,
+                                                 int count,
+                                                 int baseShaderRegister)
 {
-    // Unlike SRVs and UAVs, samplers are handled so that each sampler becomes
-    // a root parameter with its own descriptor table.
+    // Unlike SRVs and UAVs, samplers are handled so that each binding becomes
+    // a root parameter with its own descriptor table. An array of samplers is
+    // one range of count descriptors within that table: shaders declare such
+    // an array as a single range and D3D12 rejects the pipeline unless the
+    // range is bound in full.
 
     int &rangeStoreIdx(visitorData.samplerRangeHeads[s]);
     if (rangeStoreIdx == 16) {
-        qWarning("Sampler count in QD3D12Stage %d exceeds the limit of 16, this is disallowed by QRhi", s);
+        qWarning("Sampler binding count in QD3D12Stage %d exceeds the limit of 16, this is disallowed by QRhi", s);
         return;
     }
     D3D12_DESCRIPTOR_RANGE1 range = {};
     range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER;
-    range.NumDescriptors = 1;
-    range.BaseShaderRegister = shaderRegister;
+    range.NumDescriptors = UINT(count);
+    range.BaseShaderRegister = baseShaderRegister;
     visitorData.samplerRanges[s][rangeStoreIdx] = range;
     D3D12_ROOT_PARAMETER1 param = {};
     param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
@@ -5015,8 +5587,8 @@ QD3D12ObjectHandle QD3D12ShaderResourceBindings::createRootSignature(const QD3D1
 
     using namespace std::placeholders;
     visitor.uniformBuffer = std::bind(&QD3D12ShaderResourceBindings::visitUniformBuffer, this, _1, _2, _3, _4);
-    visitor.texture = std::bind(&QD3D12ShaderResourceBindings::visitTexture, this, _1, _2, _3);
-    visitor.sampler = std::bind(&QD3D12ShaderResourceBindings::visitSampler, this, _1, _2, _3);
+    visitor.textures = std::bind(&QD3D12ShaderResourceBindings::visitTextures, this, _1, _2, _3, _4);
+    visitor.samplers = std::bind(&QD3D12ShaderResourceBindings::visitSamplers, this, _1, _2, _3, _4);
     visitor.storageBuffer = std::bind(&QD3D12ShaderResourceBindings::visitStorageBuffer, this, _1, _2, _3, _4);
     visitor.storageImage = std::bind(&QD3D12ShaderResourceBindings::visitStorageImage, this, _1, _2, _3, _4);
 
@@ -5665,11 +6237,21 @@ bool QD3D12GraphicsPipeline::create()
     }
 
     QD3D12RenderPassDescriptor *rpD = QRHI_RES(QD3D12RenderPassDescriptor, m_renderPassDesc);
-    const DXGI_SAMPLE_DESC sampleDesc = rhiD->effectiveSampleDesc(m_sampleCount, DXGI_FORMAT(rpD->colorFormat[0]));
+    DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
+    if (rpD->colorAttachmentCount > 0) {
+        format = DXGI_FORMAT(rpD->colorFormat[0]);
+    } else if (rpD->hasDepthStencil) {
+        format = DXGI_FORMAT(rpD->dsFormat);
+    } else {
+        qWarning("Cannot create graphics pipeline state without color or depthStencil format");
+        return false;
+    }
+    const DXGI_SAMPLE_DESC sampleDesc = rhiD->effectiveSampleDesc(m_sampleCount, format);
 
     struct {
         QD3D12PipelineStateSubObject<ID3D12RootSignature *, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE> rootSig;
         QD3D12PipelineStateSubObject<D3D12_INPUT_LAYOUT_DESC, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT> inputLayout;
+        QD3D12PipelineStateSubObject<D3D12_INDEX_BUFFER_STRIP_CUT_VALUE, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_IB_STRIP_CUT_VALUE> primitiveRestartValue;
         QD3D12PipelineStateSubObject<D3D12_PRIMITIVE_TOPOLOGY_TYPE, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY> primitiveTopology;
         QD3D12PipelineStateSubObject<D3D12_SHADER_BYTECODE, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS> VS;
         QD3D12PipelineStateSubObject<D3D12_SHADER_BYTECODE, D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_HS> HS;
@@ -5728,6 +6310,8 @@ bool QD3D12GraphicsPipeline::create()
     stream.inputLayout.object.NumElements = inputDescs.count();
     stream.inputLayout.object.pInputElementDescs = inputDescs.isEmpty() ? nullptr : inputDescs.constData();
 
+    stream.primitiveRestartValue.object = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFFFFFF;
+
     stream.primitiveTopology.object = toD3DTopologyType(m_topology);
     topology = toD3DTopology(m_topology, m_patchControlPointCount);
 
@@ -5765,7 +6349,7 @@ bool QD3D12GraphicsPipeline::create()
     stream.rasterizerState.object.FrontCounterClockwise = m_frontFace == CCW;
     stream.rasterizerState.object.DepthBias = m_depthBias;
     stream.rasterizerState.object.SlopeScaledDepthBias = m_slopeScaledDepthBias;
-    stream.rasterizerState.object.DepthClipEnable = TRUE;
+    stream.rasterizerState.object.DepthClipEnable = m_depthClamp ? FALSE : TRUE;
     stream.rasterizerState.object.MultisampleEnable = sampleDesc.Count > 1;
 
     stream.depthStencilState.object.DepthEnable = m_depthTest;
@@ -5999,6 +6583,9 @@ bool QD3D12RenderPassDescriptor::isCompatible(const QRhiRenderPassDescriptor *ot
             return false;
     }
 
+    if (hasShadingRateMap != o->hasShadingRateMap)
+        return false;
+
     return true;
 }
 
@@ -6021,6 +6608,7 @@ QRhiRenderPassDescriptor *QD3D12RenderPassDescriptor::newCompatibleRenderPassDes
     rpD->hasDepthStencil = hasDepthStencil;
     memcpy(rpD->colorFormat, colorFormat, sizeof(colorFormat));
     rpD->dsFormat = dsFormat;
+    rpD->hasShadingRateMap = hasShadingRateMap;
 
     rpD->updateSerializedFormat();
 
@@ -6138,6 +6726,8 @@ void QD3D12SwapChain::destroy()
         frameLatencyWaitableObject = nullptr;
     }
 
+    QDxgiVSyncService::instance()->unregisterWindow(window);
+
     QRHI_RES_RHI(QRhiD3D12);
     if (rhiD) {
         rhiD->swapchains.remove(this);
@@ -6210,11 +6800,8 @@ bool QD3D12SwapChain::isFormatSupported(Format f)
     }
 
     QRHI_RES_RHI(QRhiD3D12);
-    DXGI_OUTPUT_DESC1 desc1;
-    if (QRhiD3D::outputDesc1ForWindow(m_window, rhiD->activeAdapter, &desc1)) {
-        if (desc1.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020)
-            return f == QRhiSwapChain::HDRExtendedSrgbLinear || f == QRhiSwapChain::HDR10;
-    }
+    if (QDxgiHdrInfo(rhiD->activeAdapter).isHdrCapable(m_window))
+        return f == QRhiSwapChain::HDRExtendedSrgbLinear || f == QRhiSwapChain::HDR10;
 
     return false;
 }
@@ -6225,14 +6812,7 @@ QRhiSwapChainHdrInfo QD3D12SwapChain::hdrInfo()
     // Must use m_window, not window, given this may be called before createOrResize().
     if (m_window) {
         QRHI_RES_RHI(QRhiD3D12);
-        DXGI_OUTPUT_DESC1 hdrOutputDesc;
-        if (QRhiD3D::outputDesc1ForWindow(m_window, rhiD->activeAdapter, &hdrOutputDesc)) {
-            info.limitsType = QRhiSwapChainHdrInfo::LuminanceInNits;
-            info.limits.luminanceInNits.minLuminance = hdrOutputDesc.MinLuminance;
-            info.limits.luminanceInNits.maxLuminance = hdrOutputDesc.MaxLuminance;
-            info.luminanceBehavior = QRhiSwapChainHdrInfo::SceneReferred; // 1.0 = 80 nits
-            info.sdrWhiteLevel = QRhiD3D::sdrWhiteLevelInNits(hdrOutputDesc);
-        }
+        info = QDxgiHdrInfo(rhiD->activeAdapter).queryHdrInfo(m_window);
     }
     return info;
 }
@@ -6247,6 +6827,9 @@ QRhiRenderPassDescriptor *QD3D12SwapChain::newCompatibleRenderPassDescriptor()
     rpD->hasDepthStencil = m_depthStencil != nullptr;
     rpD->colorFormat[0] = int(srgbAdjustedColorFormat);
     rpD->dsFormat = QD3D12RenderBuffer::DS_FORMAT;
+
+    rpD->hasShadingRateMap = m_shadingRateMap != nullptr;
+
     rpD->updateSerializedFormat();
 
     QRHI_RES_RHI(QRhiD3D12);
@@ -6272,11 +6855,10 @@ void QD3D12SwapChain::chooseFormats()
     colorFormat = DEFAULT_FORMAT;
     srgbAdjustedColorFormat = m_flags.testFlag(sRGB) ? DEFAULT_SRGB_FORMAT : DEFAULT_FORMAT;
     hdrColorSpace = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709; // SDR
-    DXGI_OUTPUT_DESC1 hdrOutputDesc;
     QRHI_RES_RHI(QRhiD3D12);
-    if (QRhiD3D::outputDesc1ForWindow(m_window, rhiD->activeAdapter, &hdrOutputDesc) && m_format != SDR) {
-        // https://docs.microsoft.com/en-us/windows/win32/direct3darticles/high-dynamic-range
-        if (hdrOutputDesc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020) {
+    if (m_format != SDR) {
+        if (QDxgiHdrInfo(rhiD->activeAdapter).isHdrCapable(m_window)) {
+            // https://docs.microsoft.com/en-us/windows/win32/direct3darticles/high-dynamic-range
             switch (m_format) {
             case HDRExtendedSrgbLinear:
                 colorFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
@@ -6439,7 +7021,11 @@ bool QD3D12SwapChain::createOrResize()
                 rhiD->dxgiFactory->MakeWindowAssociation(hwnd, DXGI_MWA_NO_WINDOW_CHANGES);
             }
         }
-        if (FAILED(hr)) {
+        if (hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET) {
+            qWarning("Device loss detected during swapchain creation");
+            rhiD->deviceLost = true;
+            return false;
+        } else if (FAILED(hr)) {
             qWarning("Failed to create D3D12 swapchain: %s"
                      " (Width=%u Height=%u Format=%u SampleCount=%u BufferCount=%u Scaling=%u SwapEffect=%u Stereo=%u)",
                      qPrintable(QSystemError::windowsComString(hr)),
@@ -6565,6 +7151,7 @@ bool QD3D12SwapChain::createOrResize()
 
     currentBackBufferIndex = swapChain->GetCurrentBackBufferIndex();
     currentFrameSlot = 0;
+    lastFrameLatencyWaitSlot = -1; // wait already in the first frame, as instructed in the dxgi docs
 
     rtWrapper.setRenderPassDescriptor(m_renderPassDesc); // for the public getter in QRhiRenderTarget
     QD3D12SwapChainRenderTarget *rtD = QRHI_RES(QD3D12SwapChainRenderTarget, &rtWrapper);
@@ -6584,10 +7171,12 @@ bool QD3D12SwapChain::createOrResize()
     rtDr->d.colorAttCount = 1;
     rtDr->d.dsAttCount = m_depthStencil ? 1 : 0;
 
-    if (needsRegistration) {
+    QDxgiVSyncService::instance()->registerWindow(window);
+
+    if (needsRegistration || !rhiD->swapchains.contains(this))
         rhiD->swapchains.insert(this);
-        rhiD->registerResource(this);
-    }
+
+    rhiD->registerResource(this);
 
     return true;
 }

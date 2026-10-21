@@ -1,6 +1,7 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // Copyright (C) 2013 Aleix Pol Gonzalez <aleixpol@kde.org>
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:trivial-impl-only
 
 #ifndef QCOLLATOR_P_H
 #define QCOLLATOR_P_H
@@ -40,7 +41,7 @@ typedef QList<UCCollationValue> CollatorKeyType;
 const CollatorType NoCollator = 0;
 
 #elif defined(Q_OS_WIN)
-typedef QString CollatorKeyType;
+typedef QByteArray CollatorKeyType;
 typedef int CollatorType;
 const CollatorType NoCollator = 0;
 
@@ -55,9 +56,6 @@ class QCollatorPrivate
 public:
     QAtomicInt ref = 1;
     QLocale locale;
-#if defined(Q_OS_WIN) && !QT_CONFIG(icu)
-    LCID localeID;
-#endif
     Qt::CaseSensitivity caseSensitivity = Qt::CaseSensitive;
     bool numericMode = false;
     bool ignorePunctuation = false;

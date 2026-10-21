@@ -3,13 +3,13 @@ Date:   Mon, 28 Sep 2026 09:59:10 +0800
 Subject: Fix-crash-when-fontconfig-fallback-pattern-has-no-charset
 Upstream: https://codereview.qt-project.org/c/qt/qtbase/+/750214
 
----
+Refreshed for Debian forky Qt 6.11.2.
 
-Index: qt6-base/src/gui/text/unix/qfontenginemultifontconfig.cpp
-===================================================================
---- qt6-base.orig/src/gui/text/unix/qfontenginemultifontconfig.cpp
-+++ qt6-base/src/gui/text/unix/qfontenginemultifontconfig.cpp
-@@ -25,9 +25,11 @@ bool QFontEngineMultiFontConfig::shouldL
+diff --git a/src/gui/text/unix/qfontenginemultifontconfig.cpp b/src/gui/text/unix/qfontenginemultifontconfig.cpp
+index 6419a764..f13943ff 100644
+--- a/src/gui/text/unix/qfontenginemultifontconfig.cpp
++++ b/src/gui/text/unix/qfontenginemultifontconfig.cpp
+@@ -25,9 +25,11 @@ bool QFontEngineMultiFontConfig::shouldLoadFontEngineForCharacter(int at, uint u
      bool charSetHasChar = true;
      FcPattern *matchPattern = getMatchPatternForFallback(at - 1);
      if (matchPattern != nullptr) {

@@ -2,14 +2,13 @@ Author: Tian Shilin <tianshilin@uniontech.com>
 Date:   Mon Jun 15 15:26:49 2026
 Subject: add multi-seat event support for QWindowSystemInterface key events
 
+Refreshed for Debian forky Qt 6.11.2.
 
----
-
-Index: qt6-base/src/gui/kernel/qguiapplication.cpp
-===================================================================
---- qt6-base.orig/src/gui/kernel/qguiapplication.cpp
-+++ qt6-base/src/gui/kernel/qguiapplication.cpp
-@@ -2596,7 +2596,7 @@ void QGuiApplicationPrivate::processKeyE
+diff --git a/src/gui/kernel/qguiapplication.cpp b/src/gui/kernel/qguiapplication.cpp
+index b27c7021..2d20ec06 100644
+--- a/src/gui/kernel/qguiapplication.cpp
++++ b/src/gui/kernel/qguiapplication.cpp
+@@ -2634,7 +2634,7 @@ void QGuiApplicationPrivate::processKeyEvent(QWindowSystemInterfacePrivate::KeyE
  
      QKeyEvent ev(e->keyType, e->key, e->modifiers,
                   e->nativeScanCode, e->nativeVirtualKey, e->nativeModifiers,
@@ -18,11 +17,11 @@ Index: qt6-base/src/gui/kernel/qguiapplication.cpp
      ev.setTimestamp(e->timestamp);
  
      const auto *activePopup = activePopupWindow();
-Index: qt6-base/src/gui/kernel/qwindowsysteminterface.cpp
-===================================================================
---- qt6-base.orig/src/gui/kernel/qwindowsysteminterface.cpp
-+++ qt6-base/src/gui/kernel/qwindowsysteminterface.cpp
-@@ -495,6 +495,18 @@ bool QWindowSystemInterface::handleExten
+diff --git a/src/gui/kernel/qwindowsysteminterface.cpp b/src/gui/kernel/qwindowsysteminterface.cpp
+index 15cea966..b40f9236 100644
+--- a/src/gui/kernel/qwindowsysteminterface.cpp
++++ b/src/gui/kernel/qwindowsysteminterface.cpp
+@@ -499,6 +499,18 @@ bool QWindowSystemInterface::handleExtendedKeyEvent(QWindow *window, ulong times
          timestamp, type, key, modifiers, nativeScanCode, nativeVirtualKey, nativeModifiers, text, autorep, count);
  }
  

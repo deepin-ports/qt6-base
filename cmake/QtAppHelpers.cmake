@@ -59,6 +59,17 @@ function(qt_internal_add_app target)
         set(arg_NO_UNITY_BUILD "")
     endif()
 
+    _qt_internal_forward_function_args(
+        FORWARD_PREFIX arg
+        FORWARD_OUT_VAR add_executable_args
+        FORWARD_SINGLE
+            TARGET_COMPANY
+            TARGET_COPYRIGHT
+            TARGET_DESCRIPTION
+            TARGET_PRODUCT
+            TARGET_VERSION
+    )
+
     qt_internal_add_executable("${target}"
         QT_APP
         DELAY_RC
@@ -75,7 +86,6 @@ function(qt_internal_add_app target)
             ${arg_INCLUDE_DIRECTORIES}
         DEFINES
             ${arg_DEFINES}
-            ${deprecation_define}
         LIBRARIES
             ${arg_LIBRARIES}
             ${arg_PUBLIC_LIBRARIES}
@@ -85,11 +95,7 @@ function(qt_internal_add_app target)
         MOC_OPTIONS ${arg_MOC_OPTIONS}
         ENABLE_AUTOGEN_TOOLS ${arg_ENABLE_AUTOGEN_TOOLS}
         DISABLE_AUTOGEN_TOOLS ${arg_DISABLE_AUTOGEN_TOOLS}
-        TARGET_VERSION ${arg_TARGET_VERSION}
-        TARGET_PRODUCT ${arg_TARGET_PRODUCT}
-        TARGET_DESCRIPTION ${arg_TARGET_DESCRIPTION}
-        TARGET_COMPANY ${arg_TARGET_COMPANY}
-        TARGET_COPYRIGHT ${arg_TARGET_COPYRIGHT}
+        ${add_executable_args}
         # If you are putting anything after these, make sure that
         # qt_set_target_info_properties knows how to process them
     )
@@ -115,7 +121,7 @@ function(qt_internal_add_app target)
 
     if(QT_GENERATE_SBOM)
         set(sbom_args "")
-        list(APPEND sbom_args TYPE QT_APP)
+        list(APPEND sbom_args DEFAULT_SBOM_ENTITY_TYPE QT_APP)
 
         qt_get_cmake_configurations(cmake_configs)
         foreach(cmake_config IN LISTS cmake_configs)
@@ -147,7 +153,7 @@ function(qt_internal_add_app target)
                 ${__qt_internal_sbom_multi_args}
         )
 
-        _qt_internal_extend_sbom(${target} ${sbom_args})
+        qt_internal_extend_qt_entity_sbom(${target} ${sbom_args})
     endif()
 
     qt_add_list_file_finalizer(qt_internal_finalize_app ${target})

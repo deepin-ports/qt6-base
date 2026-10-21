@@ -743,13 +743,13 @@ bool QOpenGLContext::makeCurrent(QSurface *surface)
 void QOpenGLContext::doneCurrent()
 {
     Q_D(QOpenGLContext);
-    if (!isValid())
-        return;
 
-    if (QOpenGLContext::currentContext() == this)
-        d->shareGroup->d_func()->deletePendingResources(this);
+    if (isValid()) {
+        if (QOpenGLContext::currentContext() == this)
+            d->shareGroup->d_func()->deletePendingResources(this);
+        d->platformGLContext->doneCurrent();
+    }
 
-    d->platformGLContext->doneCurrent();
     QOpenGLContextPrivate::setCurrentContext(nullptr);
 
     d->surface = nullptr;
@@ -804,9 +804,18 @@ void QOpenGLContext::swapBuffers(QSurface *surface)
 }
 
 /*!
-    Resolves the function pointer to an OpenGL extension function, identified by \a procName
+    Resolves the function pointer to an OpenGL extension function, identified by \a procName.
 
-    Returns \nullptr if no such function can be found.
+    Use this function to access OpenGL extension functions or core functions
+    that may not be available as linked symbols on all platforms.
+
+    The returned pointer may be platform-dependent. Some systems may return a
+    pointer that is not \nullptr even if the function is not valid or supported.
+
+    To reliably check function availability, test for extension support by calling
+    \l QOpenGLContext::hasExtension(). For core functions, check the current context's
+    version via \l{QSurfaceFormat::}{version()} in the QSurfaceFormat returned by
+    \l QOpenGLContext::format().
 */
 QFunctionPointer QOpenGLContext::getProcAddress(const QByteArray &procName) const
 {
@@ -959,10 +968,6 @@ bool QOpenGLContext::supportsThreadedOpenGL()
     This is useful if you need to upload OpenGL objects (buffers, textures,
     etc.) before creating or showing a QOpenGLWidget or QQuickWidget.
 
-    \note You must set the Qt::AA_ShareOpenGLContexts flag on QGuiApplication
-    before creating the QGuiApplication object, otherwise Qt may not create a
-    global shared context.
-
     \warning Do not attempt to make the context returned by this function
     current on any surface. Instead, you can create a new context which shares
     with the global one, and then make the new context current.
@@ -972,6 +977,19 @@ bool QOpenGLContext::supportsThreadedOpenGL()
 QOpenGLContext *QOpenGLContext::globalShareContext()
 {
     Q_ASSERT(qGuiApp);
+
+    static QMutex mutex;
+    QMutexLocker locker(&mutex);
+
+    // Lazily create a global share context when enabled unless there is already one
+    if (!qt_gl_global_share_context() && qGuiApp->testAttribute(Qt::AA_ShareOpenGLContexts)) {
+        QOpenGLContext *ctx = new QOpenGLContext;
+        ctx->setFormat(QSurfaceFormat::defaultFormat());
+        ctx->create();
+        ctx->moveToThread(qGuiApp->thread());
+        qt_gl_set_global_share_context(ctx);
+        QGuiApplicationPrivate::instance()->ownGlobalShareContext = true;
+    }
     return qt_gl_global_share_context();
 }
 
@@ -1310,7 +1328,7 @@ QDebug operator<<(QDebug debug, const QOpenGLContext *ctx)
             debug << ", invalid";
         }
     } else {
-        debug << '0';
+        debug << "0x0";
     }
     debug << ')';
     return debug;
@@ -1324,7 +1342,7 @@ QDebug operator<<(QDebug debug, const QOpenGLContextGroup *cg)
     if (cg)
         debug << cg->shares();
     else
-        debug << '0';
+        debug << "0x0";
     debug << ')';
     return debug;
 }

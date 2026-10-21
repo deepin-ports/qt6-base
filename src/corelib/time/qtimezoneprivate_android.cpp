@@ -1,6 +1,7 @@
 // Copyright (C) 2021 The Qt Company Ltd.
 // Copyright (C) 2014 Drew Parsons <dparsons@emerall.com>
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #include "qtimezone.h"
 #include "qtimezoneprivate_p.h"
@@ -41,13 +42,6 @@ QAndroidTimeZonePrivate::QAndroidTimeZonePrivate(const QByteArray &ianaId)
     : QTimeZonePrivate()
 {
     init(ianaId);
-}
-
-QAndroidTimeZonePrivate::QAndroidTimeZonePrivate(const QAndroidTimeZonePrivate &other)
-    : QTimeZonePrivate(other)
-{
-    androidTimeZone = other.androidTimeZone;
-    m_id = other.id();
 }
 
 QAndroidTimeZonePrivate::~QAndroidTimeZonePrivate()
@@ -210,14 +204,19 @@ QList<QByteArray> QAndroidTimeZonePrivate::availableTimeZoneIds() const
 {
     using namespace QtJniTypes;
 
-    const QJniArray androidAvailableIdList = TimeZone::callStaticMethod<String[]>("getAvailableIDs");
+    const QJniArray androidAvailableIdList
+        = TimeZone::callStaticMethod<String[]>("getAvailableIDs");
+    // Does not document order of entries.
 
-    QList<QByteArray> availableTimeZoneIdList;
-    availableTimeZoneIdList.reserve(androidAvailableIdList.size());
+    QList<QByteArray> result;
+    result.reserve(androidAvailableIdList.size());
     for (const auto &id : androidAvailableIdList)
-        availableTimeZoneIdList.append(id.toString().toUtf8());
+        result.append(id.toString().toUtf8());
 
-    return availableTimeZoneIdList;
+    // Sort & uniquify (just to be sure; it appears to not need this, but we can't rely on that).
+    std::sort(result.begin(), result.end());
+    result.erase(std::unique(result.begin(), result.end()), result.end());
+    return result;
 }
 
 QT_END_NAMESPACE

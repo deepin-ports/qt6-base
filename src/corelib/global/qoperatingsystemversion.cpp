@@ -1,5 +1,6 @@
 // Copyright (C) 2021 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #include "qoperatingsystemversion.h"
 
@@ -112,7 +113,8 @@ QT_BEGIN_NAMESPACE
 */
 
 /*!
-    \fn QOperatingSystemVersion::current()
+    \fn QOperatingSystemVersion QOperatingSystemVersion::current()
+
     Returns a QOperatingSystemVersion indicating the current OS and its version number.
 
     \sa currentType()
@@ -480,6 +482,18 @@ const QOperatingSystemVersionBase QOperatingSystemVersion::Windows11_22H2;
  */
 
 /*!
+    \variable QOperatingSystemVersion::Windows11_24H2
+    \brief a version corresponding to Windows 11 Version 24H2 (version 10.0.26100).
+    \since 6.8.1
+ */
+
+/*!
+    \variable QOperatingSystemVersion::Windows11_25H2
+    \brief a version corresponding to Windows 11 Version 25H2 (version 10.0.26200).
+    \since 6.11
+ */
+
+/*!
     \variable QOperatingSystemVersion::OSXMavericks
     \brief a version corresponding to OS X Mavericks (version 10.9).
     \since 5.9
@@ -541,7 +555,7 @@ const QOperatingSystemVersion QOperatingSystemVersion::MacOSCatalina =
     \since 6.0
  */
 const QOperatingSystemVersion QOperatingSystemVersion::MacOSBigSur =
-    QOperatingSystemVersion(QOperatingSystemVersion::MacOS, 11, 0);
+    QOperatingSystemVersion(QOperatingSystemVersion::MacOS, 11);
 
 /*!
     \variable QOperatingSystemVersion::MacOSMonterey
@@ -549,7 +563,7 @@ const QOperatingSystemVersion QOperatingSystemVersion::MacOSBigSur =
     \since 6.3
  */
 const QOperatingSystemVersion QOperatingSystemVersion::MacOSMonterey =
-    QOperatingSystemVersion(QOperatingSystemVersion::MacOS, 12, 0);
+    QOperatingSystemVersion(QOperatingSystemVersion::MacOS, 12);
 
 /*!
     \variable QOperatingSystemVersion::MacOSVentura
@@ -568,6 +582,18 @@ const QOperatingSystemVersionBase QOperatingSystemVersion::MacOSVentura;
     \variable QOperatingSystemVersion::MacOSSequoia
     \brief a version corresponding to macOS Sequoia (version 15).
     \since 6.8
+*/
+
+/*!
+    \variable QOperatingSystemVersion::MacOSTahoe
+    \brief a version corresponding to macOS Tahoe (version 26).
+    \since 6.10
+*/
+
+/*!
+    \variable QOperatingSystemVersion::MacOSGoldenGate
+    \brief a version corresponding to macOS Golden Gate (version 27).
+    \since 6.12
 */
 
 /*!

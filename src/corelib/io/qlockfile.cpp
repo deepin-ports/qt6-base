@@ -2,6 +2,7 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // Copyright (C) 2017 Intel Corporation.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:data-parser
 
 #include "qlockfile.h"
 #include "qlockfile_p.h"
@@ -12,22 +13,16 @@
 #include <QtCore/qdatetime.h>
 #include <QtCore/qfileinfo.h>
 
+#include <qplatformdefs.h>
+
+#ifdef Q_OS_WIN
+#include <io.h>
+#include <qt_windows.h>
+#endif
+
 QT_BEGIN_NAMESPACE
 
 using namespace Qt::StringLiterals;
-
-namespace {
-struct LockFileInfo
-{
-    qint64 pid;
-    QString appname;
-    QString hostname;
-    QByteArray hostid;
-    QByteArray bootid;
-};
-}
-
-static bool getLockInfo_helper(const QString &fileName, LockFileInfo *info);
 
 static QString machineName()
 {
@@ -126,6 +121,8 @@ QString QLockFile::fileName() const
 }
 
 /*!
+    \fn void QLockFile::setStaleLockTime(int staleLockTime)
+
     Sets \a staleLockTime to be the time in milliseconds after which
     a lock file is considered stale.
     The default value is 30000, i.e. 30 seconds.
@@ -146,10 +143,6 @@ QString QLockFile::fileName() const
 
     \sa staleLockTime()
 */
-void QLockFile::setStaleLockTime(int staleLockTime)
-{
-    setStaleLockTime(std::chrono::milliseconds{staleLockTime});
-}
 
 /*!
     \since 6.2
@@ -176,15 +169,13 @@ void QLockFile::setStaleLockTime(std::chrono::milliseconds staleLockTime)
 }
 
 /*!
+    \fn int QLockFile::staleLockTime() const
+
     Returns the time in milliseconds after which
     a lock file is considered stale.
 
     \sa setStaleLockTime()
 */
-int QLockFile::staleLockTime() const
-{
-    return int(staleLockTimeAsDuration().count());
-}
 
 /*! \fn std::chrono::milliseconds QLockFile::staleLockTimeAsDuration() const
     \overload
@@ -234,6 +225,8 @@ bool QLockFile::lock()
 }
 
 /*!
+    \fn bool QLockFile::tryLock(int timeout)
+
     Attempts to create the lock file. This function returns \c true if the
     lock was obtained; otherwise it returns \c false. If another process (or
     another thread) has created the lock file already, this function will
@@ -253,10 +246,6 @@ bool QLockFile::lock()
 
     \sa lock(), unlock()
 */
-bool QLockFile::tryLock(int timeout)
-{
-    return tryLock(std::chrono::milliseconds{ timeout });
-}
 
 /*!
     \overload
@@ -362,8 +351,8 @@ bool QLockFile::tryLock(std::chrono::milliseconds timeout)
 bool QLockFile::getLockInfo(qint64 *pid, QString *hostname, QString *appname) const
 {
     Q_D(const QLockFile);
-    LockFileInfo info;
-    if (!getLockInfo_helper(d->fileName, &info))
+    QLockFilePrivate::LockFileInfo info;
+    if (!QLockFilePrivate::getLockInfo_helper(d->fileName, &info))
         return false;
     if (pid)
         *pid = info.pid;
@@ -374,21 +363,40 @@ bool QLockFile::getLockInfo(qint64 *pid, QString *hostname, QString *appname) co
     return true;
 }
 
+QLockFilePrivate::QLockFilePrivate(const QString &fn)
+    : fileName(fn),
+#ifdef Q_OS_WIN
+      fileHandle(INVALID_HANDLE_VALUE)
+#else
+      fileHandle(-1)
+#endif
+{
+}
+
+QLockFilePrivate::~QLockFilePrivate()
+    = default;
+
 QByteArray QLockFilePrivate::lockFileContents() const
 {
     // Use operator% from the fast builder to avoid multiple memory allocations.
-    return QByteArray::number(QCoreApplication::applicationPid()) % '\n'
-            % processNameByPid(QCoreApplication::applicationPid()).toUtf8() % '\n'
+    qint64 pid = QCoreApplication::applicationPid();
+    return QByteArray::number(pid) % '\n'
+            % processNameByPid(pid).toUtf8() % '\n'
             % machineName().toUtf8() % '\n'
             % QSysInfo::machineUniqueId() % '\n'
             % QSysInfo::bootUniqueId() % '\n';
 }
 
-static bool getLockInfo_helper(const QString &fileName, LockFileInfo *info)
+bool QLockFilePrivate::getLockInfo_helper(const QString &fileName, LockFileInfo *info)
 {
-    QFile reader(fileName);
-    if (!reader.open(QIODevice::ReadOnly | QIODevice::Text))
+    int fd = openNewFileDescriptor(fileName);
+    if (fd < 0)
         return false;
+    QFile reader;
+    if (!reader.open(fd, QFile::ReadOnly | QFile::Text, QFile::AutoCloseHandle)) {
+        QT_CLOSE(fd);
+        return false;
+    }
 
     QByteArray pidLine = reader.readLine();
     pidLine.chop(1);
@@ -408,8 +416,8 @@ static bool getLockInfo_helper(const QString &fileName, LockFileInfo *info)
     bool ok;
     info->appname = QString::fromUtf8(appNameLine);
     info->hostname = QString::fromUtf8(hostNameLine);
-    info->hostid = hostId;
-    info->bootid = bootId;
+    info->hostid = std::move(hostId);
+    info->bootid = std::move(bootId);
     info->pid = pidLine.toLongLong(&ok);
     return ok && info->pid > 0;
 }
@@ -442,6 +450,8 @@ bool QLockFilePrivate::isApparentlyStale() const
     const milliseconds age{lastMod.msecsTo(QDateTime::currentDateTimeUtc())};
     return staleLockTime > 0ms && abs(age) > staleLockTime;
 }
+
+
 
 /*!
     Attempts to forcefully remove an existing lock file.

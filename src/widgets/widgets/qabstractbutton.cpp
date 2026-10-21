@@ -1,5 +1,6 @@
 // Copyright (C) 2020 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #include "private/qabstractbutton_p.h"
 
@@ -326,7 +327,10 @@ void QAbstractButtonPrivate::init()
 {
     Q_Q(QAbstractButton);
 
-    q->setFocusPolicy(Qt::FocusPolicy(q->style()->styleHint(QStyle::SH_Button_FocusPolicy)));
+    // Query focus policy. Don't pass the QWidget pointer since QStyleSheetStyle will
+    // (if in use) cache it derive incorrect style metrics from it.
+    q->setFocusPolicy(Qt::FocusPolicy(q->style()->styleHint(QStyle::SH_Button_FocusPolicy,
+                                                            nullptr, nullptr)));
     q->setSizePolicy(QSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed, controlType));
     q->setAttribute(Qt::WA_WState_OwnSizePolicy, false);
     q->setForegroundRole(QPalette::ButtonText);
@@ -428,6 +432,13 @@ void QAbstractButtonPrivate::emitToggled(bool checked)
             emit group->buttonToggled(q, checked);
     }
 #endif
+}
+
+QStyle::State QAbstractButtonPrivate::styleButtonState(QStyle::State state) const
+{
+    if (down)
+        state |= QStyle::State_Sunken;
+    return state;
 }
 
 /*!
@@ -1236,7 +1247,10 @@ QSize QAbstractButton::iconSize() const
     Q_D(const QAbstractButton);
     if (d->iconSize.isValid())
         return d->iconSize;
-    int e = style()->pixelMetric(QStyle::PM_ButtonIconSize, nullptr, this);
+    QStyleOption opt;
+    opt.initFrom(this);
+    opt.state = d->styleButtonState(opt.state);
+    int e = style()->pixelMetric(QStyle::PM_ButtonIconSize, &opt, this);
     return QSize(e, e);
 }
 

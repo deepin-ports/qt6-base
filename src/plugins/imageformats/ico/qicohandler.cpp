@@ -1,5 +1,6 @@
 // Copyright (C) 2022 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:data-parser
 
 /*!
     \class QtIcoHandler
@@ -517,7 +518,7 @@ QImage ICOReader::iconAt(int index)
                         }
                     }
                 }
-                img.setText(QLatin1String(icoOrigDepthKey), QString::number(iconEntry.wBitCount));
+                img.setText(QLatin1String(icoOrigDepthKey), QString::number(icoAttrib.nbits));
             }
         }
     }
@@ -569,7 +570,7 @@ bool ICOReader::write(QIODevice *device, const QList<QImage> &images)
 
         qint64 origOffset = device->pos();
 
-        ICONDIR id;
+        ICONDIR id = { };
         id.idReserved = 0;
         id.idType = 1;
         id.idCount = images.size();

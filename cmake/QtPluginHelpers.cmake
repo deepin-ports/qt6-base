@@ -9,6 +9,7 @@ macro(qt_internal_get_internal_add_plugin_keywords option_args single_args multi
         ALLOW_UNDEFINED_SYMBOLS
         SKIP_INSTALL
         NO_UNITY_BUILD
+        TEST_PLUGIN
         ${__qt_internal_sbom_optional_args}
     )
     set(${single_args}
@@ -114,6 +115,12 @@ function(qt_internal_add_plugin target)
 
     qt_get_sanitized_plugin_type("${plugin_type}" plugin_type_escaped)
 
+    if(NOT TARGET qt_${plugin_type_escaped}_plugins_all)
+        add_custom_target(qt_${plugin_type_escaped}_plugins_all)
+    endif()
+    add_dependencies(qt_${plugin_type_escaped}_plugins_all ${target})
+
+
     set(output_directory_default "${QT_BUILD_DIR}/${INSTALL_PLUGINSDIR}/${plugin_type}")
     set(install_directory_default "${INSTALL_PLUGINSDIR}/${plugin_type}")
 
@@ -159,7 +166,8 @@ function(qt_internal_add_plugin target)
 
     qt_set_common_target_properties("${target}")
     qt_internal_add_target_aliases("${target}")
-    qt_skip_warnings_are_errors_when_repo_unclean("${target}")
+
+    qt_internal_default_warnings_are_errors("${target}")
 
     set_target_properties("${target}" PROPERTIES
         LIBRARY_OUTPUT_DIRECTORY "${output_directory}"
@@ -206,16 +214,14 @@ function(qt_internal_add_plugin target)
         set(plugin_install_package_suffix "${qt_module}")
 
 
-        get_target_property(aliased_target ${qt_module_target} ALIASED_TARGET)
-        if(aliased_target)
-            set(qt_module_target ${aliased_target})
-        endif()
+        _qt_internal_dealias_target(qt_module_target)
         get_target_property(is_imported_qt_module ${qt_module_target} IMPORTED)
 
         if(NOT is_imported_qt_module)
             # This QT_PLUGINS assignment is only used by QtPostProcessHelpers to decide if a
             # QtModulePlugins.cmake file should be generated.
             set_property(TARGET "${qt_module_target}" APPEND PROPERTY QT_PLUGINS "${target}")
+            __qt_internal_add_interface_plugin_target(${qt_module_target} ${target} BUILD_ONLY)
         else()
             # The _qt_plugins property is considered when collecting the plugins in
             # deployment process. The usecase is following:
@@ -223,10 +229,9 @@ function(qt_internal_add_plugin target)
             # The plugin is built in some application build tree and its PLUGIN_TYPE is associated
             # with QtModuleX.
             set_property(TARGET "${qt_module_target}" APPEND PROPERTY _qt_plugins "${target}")
+            __qt_internal_add_interface_plugin_target(${qt_module_target} ${target})
         endif()
 
-        set(plugin_target_versioned "${QT_CMAKE_EXPORT_NAMESPACE}::${target}")
-        get_target_property(type "${plugin_target_versioned}" TYPE)
         qt_internal_add_autogen_sync_header_dependencies(${target} ${qt_module_target})
     endif()
 
@@ -299,10 +304,8 @@ function(qt_internal_add_plugin target)
         PUBLIC_LIBRARIES ${arg_PUBLIC_LIBRARIES}
         DEFINES
             ${arg_DEFINES}
-            ${deprecation_define}
         PUBLIC_DEFINES
             ${arg_PUBLIC_DEFINES}
-        FEATURE_DEPENDENCIES ${arg_FEATURE_DEPENDENCIES}
         DBUS_ADAPTOR_SOURCES ${arg_DBUS_ADAPTOR_SOURCES}
         DBUS_ADAPTOR_FLAGS ${arg_DBUS_ADAPTOR_FLAGS}
         DBUS_INTERFACE_SOURCES ${arg_DBUS_INTERFACE_SOURCES}
@@ -318,8 +321,11 @@ function(qt_internal_add_plugin target)
 
     qt_internal_add_repo_local_defines("${target}")
 
-    qt_internal_set_exceptions_flags("${target}" ${arg_EXCEPTIONS})
-
+    if(NOT arg_EXCEPTIONS)
+        qt_internal_set_exceptions_flags("${target}" "DEFAULT")
+    else()
+        qt_internal_set_exceptions_flags("${target}" "${arg_EXCEPTIONS}")
+    endif()
 
     set(qt_libs_private "")
     qt_internal_get_qt_all_known_modules(known_modules)
@@ -330,11 +336,22 @@ function(qt_internal_add_plugin target)
         endif()
     endforeach()
 
-    qt_register_target_dependencies("${target}" "${arg_PUBLIC_LIBRARIES}" "${qt_libs_private}")
+    set(qt_register_target_dependencies_args "")
+    if(arg_PUBLIC_LIBRARIES)
+        list(APPEND qt_register_target_dependencies_args PUBLIC ${arg_PUBLIC_LIBRARIES})
+    endif()
+    if(qt_libs_private)
+        qt_internal_wrap_private_modules("${target}"
+            OUT_VAR qt_libs_private
+            LIBRARIES ${qt_libs_private})
+        list(APPEND qt_register_target_dependencies_args PRIVATE ${qt_libs_private})
+    endif()
+    qt_internal_register_target_dependencies("${target}" ${qt_register_target_dependencies_args})
 
     if(target_type STREQUAL STATIC_LIBRARY)
         if(qt_module_target)
-            qt_internal_link_internal_platform_for_object_library("${plugin_init_target}")
+            qt_internal_link_internal_platform_for_object_library("${plugin_init_target}"
+                PARENT_TARGET "${target}")
         endif()
     endif()
 
@@ -360,11 +377,61 @@ function(qt_internal_add_plugin target)
 
         qt_internal_get_min_new_policy_cmake_version(min_new_policy_version)
         qt_internal_get_max_new_policy_cmake_version(max_new_policy_version)
+
+        # For test plugins we need to make sure plugins are not loaded from the Qt installation
+        # when building standalone tests.
+        set(test_plugin_arg "")
+        if(QT_INTERNAL_CONFIGURING_TESTS OR arg_TEST_PLUGIN)
+            if(NOT arg_TEST_PLUGIN)
+                message(WARNING "The installable test plugin ${target} is built as part of a test"
+                    " suite, but is not marked as TEST_PLUGIN using the respective argument."
+                    "\nThis warning will soon become an error."
+                )
+            endif()
+            set(test_plugin_arg TEST_PLUGIN)
+        endif()
+
+        # Some plugins like the sqldriver ones can be built as part of the main repo or as a
+        # separate standalone project. We need to make sure we exclude loading the Qt prebuilt
+        # plugins when loading such a project regardless which way it is built.
+        if(QT_STANDALONE_PROJECT_NAME)
+            set(project_names_arg "${QT_STANDALONE_PROJECT_NAME}")
+
+            if(QT_PARENT_PROJECT_NAME)
+                list(APPEND project_names_arg "${QT_PARENT_PROJECT_NAME}")
+            else()
+                message(WARNING
+                    "QT_STANDALONE_PROJECT_NAME is set to '${QT_STANDALONE_PROJECT_NAME}', but "
+                    "QT_PARENT_PROJECT_NAME is not set. This can cause issues when building the "
+                    "standalone project. Set QT_PARENT_PROJECT_NAME to the submodule's "
+                    "root CMakeLists.txt project name to avoid this warning."
+                )
+            endif()
+        else()
+            set(project_names_arg "${PROJECT_NAME}")
+        endif()
+        list(PREPEND project_names_arg "PROJECT_NAMES")
+        string(REPLACE ";" " " project_names_arg "${project_names_arg}")
+
         configure_package_config_file(
             "${QT_CMAKE_DIR}/QtPluginConfig.cmake.in"
             "${config_build_dir}/${INSTALL_CMAKE_NAMESPACE}${target}Config.cmake"
             INSTALL_DESTINATION "${config_install_dir}"
         )
+
+        qt_configure_file(
+            OUTPUT "${config_build_dir}/${INSTALL_CMAKE_NAMESPACE}${target}TargetsPrecheck.cmake"
+            CONTENT
+# TODO: Remove the CHECK_QT_NO_CREATE_TARGETS once a better approach is developed
+"
+_qt_internal_should_include_targets(
+    TARGETS ${target}
+    NAMESPACE ${INSTALL_CMAKE_NAMESPACE}::
+    ${project_names_arg}
+    OUT_VAR_SHOULD_SKIP __qt_${target}_skip_include_targets_file
+    ${test_plugin_arg}
+)
+")
         write_basic_package_version_file(
             "${config_build_dir}/${INSTALL_CMAKE_NAMESPACE}${target}ConfigVersionImpl.cmake"
             VERSION ${PROJECT_VERSION}
@@ -379,6 +446,7 @@ function(qt_internal_add_plugin target)
             "${config_build_dir}/${INSTALL_CMAKE_NAMESPACE}${target}Config.cmake"
             "${config_build_dir}/${INSTALL_CMAKE_NAMESPACE}${target}ConfigVersion.cmake"
             "${config_build_dir}/${INSTALL_CMAKE_NAMESPACE}${target}ConfigVersionImpl.cmake"
+            "${config_build_dir}/${INSTALL_CMAKE_NAMESPACE}${target}TargetsPrecheck.cmake"
             DESTINATION "${config_install_dir}"
             COMPONENT Devel
         )
@@ -419,7 +487,7 @@ function(qt_internal_add_plugin target)
 
     if(QT_GENERATE_SBOM)
         set(sbom_args "")
-        list(APPEND sbom_args TYPE QT_PLUGIN)
+        list(APPEND sbom_args DEFAULT_SBOM_ENTITY_TYPE QT_PLUGIN)
 
         qt_get_cmake_configurations(configs)
         foreach(config IN LISTS configs)
@@ -443,7 +511,7 @@ function(qt_internal_add_plugin target)
                 ${__qt_internal_sbom_multi_args}
         )
 
-        _qt_internal_extend_sbom(${target} ${sbom_args})
+        qt_internal_extend_qt_entity_sbom(${target} ${sbom_args})
     endif()
 
     qt_add_list_file_finalizer(qt_finalize_plugin ${target} ${finalizer_extra_args})
@@ -460,12 +528,10 @@ function(qt_finalize_plugin target)
         _qt_internal_generate_win32_rc_file("${target}")
     endif()
 
-    # Generate .prl and .pri files for static plugins.
+    # Generate .prl and .pri files for installed static plugins.
     get_target_property(target_type "${target}" TYPE)
-    if(target_type STREQUAL STATIC_LIBRARY)
-        if(arg_INSTALL_PATH)
-            qt_generate_prl_file(${target} "${arg_INSTALL_PATH}")
-        endif()
+    if(target_type STREQUAL STATIC_LIBRARY AND arg_INSTALL_PATH)
+        qt_generate_prl_file(${target} "${arg_INSTALL_PATH}")
 
         # There's no point in generating pri files for qml plugins.
         # We didn't do it in Qt5 times.
@@ -521,6 +587,7 @@ function(qt_internal_add_darwin_permission_plugin permission)
         DEFAULT_IF FALSE
         SOURCES
             ${permission_source_file}
+            platform/darwin/qdarwinpermissionplugin_p_p.h
         DEFINES
             QT_DARWIN_PERMISSION_PLUGIN=${permission}
         LIBRARIES
@@ -577,7 +644,11 @@ function(qt_internal_add_darwin_permission_plugin permission)
     set_property(TARGET ${plugin_target} APPEND PROPERTY
         EXPORT_PROPERTIES _qt_darwin_permissison_separate_request
     )
-    set(permission_request_symbol "_QDarwin${permission}PermissionRequest")
+    if (QT_NAMESPACE)
+        set(permission_request_symbol "_QDarwin${permission}PermissionRequest_${QT_NAMESPACE}")
+    else()
+        set(permission_request_symbol "_QDarwin${permission}PermissionRequest")
+    endif()
     set(permission_request_flag "-Wl,-u,${permission_request_symbol}")
     set(has_usage_description_property "_qt_has_${plugin_target}_usage_description")
     set(has_usage_description_genex "$<BOOL:$<TARGET_PROPERTY:${has_usage_description_property}>>")

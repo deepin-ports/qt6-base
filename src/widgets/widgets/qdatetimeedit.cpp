@@ -1,5 +1,6 @@
 // Copyright (C) 2021 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:data-parser
 
 #include <private/qapplication_p.h>
 #include <private/qdatetimeedit_p.h>
@@ -41,7 +42,7 @@ using namespace Qt::StringLiterals;
   \ingroup basicwidgets
   \inmodule QtWidgets
 
-  \image windows-datetimeedit.png
+  \image fusion-datetimeedit.png {Widget for editing time and date}
 
   QDateTimeEdit allows the user to edit dates by using the keyboard or
   the arrow keys to increase and decrease date and time values. The
@@ -1092,17 +1093,15 @@ QSize QDateTimeEdit::sizeHint() const
         w += 2; // cursor blinking space
 
         QSize hint(w, h);
-
-#ifdef Q_OS_MAC
+        QStyleOptionSpinBox opt;
+        initStyleOption(&opt);
+        d->cachedSizeHint = style()->sizeFromContents(QStyle::CT_SpinBox, &opt, hint, this);
         if (d->calendarPopupEnabled()) {
-            QStyleOptionComboBox opt;
-            d->cachedSizeHint = style()->sizeFromContents(QStyle::CT_ComboBox, &opt, hint, this);
-        } else
-#endif
-        {
-            QStyleOptionSpinBox opt;
-            initStyleOption(&opt);
-            d->cachedSizeHint = style()->sizeFromContents(QStyle::CT_SpinBox, &opt, hint, this);
+            QStyleOptionComboBox optCbx;
+            optCbx.initFrom(this);
+            optCbx.frame = d->frame;
+            d->cachedSizeHint.rwidth() =
+                    style()->sizeFromContents(QStyle::CT_ComboBox, &optCbx, hint, this).width();
         }
 
         d->cachedMinimumSizeHint = d->cachedSizeHint;
@@ -1609,7 +1608,7 @@ void QDateTimeEdit::mousePressEvent(QMouseEvent *event)
   \ingroup basicwidgets
   \inmodule QtWidgets
 
-  \image windows-timeedit.png
+  \image fusion-timeedit.png {Editable time}
 
   Many of the properties and functions provided by QTimeEdit are implemented in
   QDateTimeEdit. These are the relevant properties of this class:
@@ -1680,7 +1679,7 @@ QTimeEdit::~QTimeEdit()
   \ingroup basicwidgets
   \inmodule QtWidgets
 
-  \image windows-dateedit.png
+  \image fusion-dateedit.png {Editable date}
 
   Many of the properties and functions provided by QDateEdit are implemented in
   QDateTimeEdit. These are the relevant properties of this class:
@@ -1758,7 +1757,6 @@ QDateTimeEditPrivate::QDateTimeEditPrivate(const QTimeZone &zone)
     type = QMetaType::QDateTime;
     currentSectionIndex = FirstSectionIndex;
 
-    first.pos = 0;
     minimum = QDATETIMEEDIT_COMPAT_DATE_MIN.startOfDay(timeZone);
     maximum = QDATETIMEEDIT_DATE_MAX.endOfDay(timeZone);
     readLocaleSettings();
@@ -2538,6 +2536,7 @@ void QDateTimeEdit::initStyleOption(QStyleOptionSpinBox *option) const
 void QDateTimeEditPrivate::init(const QVariant &var)
 {
     Q_Q(QDateTimeEdit);
+    defaultCenturyStart = QDATETIMEEDIT_DATE_INITIAL.year();
     switch (var.userType()) {
     case QMetaType::QDate:
         value = var.toDate().startOfDay(timeZone);

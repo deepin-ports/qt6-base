@@ -226,7 +226,7 @@ void QPointingDevice::setType(DeviceType devType)
 void QPointingDevice::setCapabilities(QInputDevice::Capabilities caps)
 {
     Q_D(QPointingDevice);
-    d->capabilities = caps;
+    d->setCapabilities(caps);
 }
 
 /*!
@@ -241,6 +241,11 @@ void QPointingDevice::setMaximumTouchPoints(int c)
 #endif // QT_DEPRECATED_SINCE(6, 0)
 
 /*!
+    \property QPointingDevice::pointerType
+    \brief the pointer type
+*/
+
+/*!
     Returns the pointer type.
 */
 QPointingDevice::PointerType QPointingDevice::pointerType() const
@@ -248,6 +253,12 @@ QPointingDevice::PointerType QPointingDevice::pointerType() const
     Q_D(const QPointingDevice);
     return d->pointerType;
 }
+
+/*!
+    \property QPointingDevice::maximumPoints
+    \brief the maximum number of simultaneous touch points (fingers) that
+    can be detected
+*/
 
 /*!
     Returns the maximum number of simultaneous touch points (fingers) that
@@ -260,6 +271,11 @@ int QPointingDevice::maximumPoints() const
 }
 
 /*!
+    \property QPointingDevice::buttonCount
+    \brief the maximum number of on-device buttons that can be detected
+*/
+
+/*!
     Returns the maximum number of on-device buttons that can be detected.
 */
 int QPointingDevice::buttonCount() const
@@ -267,6 +283,13 @@ int QPointingDevice::buttonCount() const
     Q_D(const QPointingDevice);
     return d->buttonCount;
 }
+
+/*!
+    \property QPointingDevice::uniqueId
+    \brief a unique ID (of dubious utility) for the device
+
+    You probably should rather be concerned with QPointerEventPoint::uniqueId().
+*/
 
 /*!
     Returns a unique ID (of dubious utility) for the device.
@@ -407,7 +430,7 @@ void QPointingDevicePrivate::sendTouchCancelEvent(QTouchEvent *cancelEvent)
     if (cancelEvent->points().isEmpty()) {
         for (auto &epd : activePoints.values()) {
             if (epd.exclusiveGrabber)
-                QMutableTouchEvent::from(cancelEvent)->addPoint(epd.eventPoint);
+                QMutableTouchEvent::addPoint(cancelEvent, epd.eventPoint);
         }
     }
     for (auto &epd : activePoints.values()) {
@@ -719,12 +742,14 @@ QDebug operator<<(QDebug debug, const QPointingDevice *device)
             debug << " caps=";
             QtDebugUtils::formatQFlags(debug, device->capabilities());
         }
+        if (device->buttonCount() > 0)
+            debug << " buttonCount=" << device->buttonCount();
         if (device->maximumPoints() > 1)
             debug << " maxPts=" << device->maximumPoints();
         if (device->uniqueId().isValid())
             debug << " uniqueId=" << Qt::hex << device->uniqueId().numericId() << Qt::dec;
     } else {
-        debug << '0';
+        debug << "0x0";
     }
     debug << ')';
     return debug;
@@ -808,10 +833,8 @@ qint64 QPointingDeviceUniqueId::numericId() const noexcept
 */
 
 /*!
-    \relates QPointingDeviceUniqueId
+    \qhashold{QPointingDeviceUniqueId}
     \since 5.8
-
-    Returns the hash value for \a key, using \a seed to seed the calculation.
 */
 size_t qHash(QPointingDeviceUniqueId key, size_t seed) noexcept
 {

@@ -1,14 +1,10 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #include "qnetworkaccesscache_p.h"
 #include "QtCore/qpointer.h"
 #include "QtCore/qdeadlinetimer.h"
-#include "qnetworkaccessmanager_p.h"
-#include "qnetworkreply_p.h"
-#include "qnetworkrequest.h"
-
-#include <vector>
 
 //#define DEBUG_ACCESSCACHE
 
@@ -178,18 +174,6 @@ void QNetworkAccessCache::updateTimer()
     // to work we cannot do this.
     // See discussion in https://codereview.qt-project.org/c/qt/qtbase/+/337464
     timer.start(interval + 10, this);
-}
-
-bool QNetworkAccessCache::emitEntryReady(Node *node, QObject *target, const char *member)
-{
-    if (!connect(this, SIGNAL(entryReady(QNetworkAccessCache::CacheableObject*)),
-                 target, member, Qt::QueuedConnection))
-        return false;
-
-    emit entryReady(node->object);
-    disconnect(SIGNAL(entryReady(QNetworkAccessCache::CacheableObject*)));
-
-    return true;
 }
 
 void QNetworkAccessCache::timerEvent(QTimerEvent *)

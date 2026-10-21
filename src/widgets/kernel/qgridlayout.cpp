@@ -1,5 +1,6 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #include "qapplication.h"
 #include "qgridlayout.h"
@@ -312,23 +313,6 @@ QGridLayoutPrivate::QGridLayoutPrivate()
     horizontalSpacing = -1;
     verticalSpacing = -1;
 }
-
-#if 0
-QGridLayoutPrivate::QGridLayoutPrivate(int nRows, int nCols)
-    : rowData(0), colData(0)
-{
-    init();
-    if (nRows  < 0) {
-        nRows = 1;
-        addVertical = false;
-    }
-    if (nCols  < 0) {
-        nCols = 1;
-        addVertical = true;
-    }
-    setSize(nRows, nCols);
-}
-#endif
 
 void QGridLayoutPrivate::deleteAll()
 {

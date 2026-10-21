@@ -2,10 +2,13 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // Copyright (C) 2016 Pelagicore AG
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #include "qeglfskmsgbmcursor_p.h"
 #include "qeglfskmsgbmscreen_p.h"
 #include "qeglfskmsgbmdevice_p.h"
+
+#include <private/qeglfskmsintegration_p.h>
 
 #include <QtCore/QFile>
 #include <QtCore/QJsonDocument>
@@ -29,8 +32,6 @@
 QT_BEGIN_NAMESPACE
 
 using namespace Qt::StringLiterals;
-
-Q_DECLARE_LOGGING_CATEGORY(qLcEglfsKmsDebug)
 
 QEglFSKmsGbmCursor::QEglFSKmsGbmCursor(QEglFSKmsGbmScreen *screen)
     : m_screen(screen)

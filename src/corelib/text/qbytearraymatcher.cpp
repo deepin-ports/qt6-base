@@ -1,5 +1,6 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:data-parser
 
 #include "qbytearraymatcher.h"
 
@@ -404,7 +405,7 @@ qsizetype QStaticByteArrayMatcherBase::indexOfIn(const char *needle, size_t nlen
     To take full advantage of this function, assign the result to an
     \c{auto} variable:
 
-    \snippet code/src_corelib_text_qbytearraymatcher.cpp 1
+    \snippet code/src_corelib_text_qbytearraymatcher.cpp 0
 */
 
 QT_END_NAMESPACE

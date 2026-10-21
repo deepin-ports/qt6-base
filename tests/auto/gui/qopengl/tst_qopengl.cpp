@@ -29,6 +29,8 @@
 
 #include <QSignalSpy>
 
+#include <optional>
+
 Q_DECLARE_METATYPE(QImage::Format)
 
 class tst_QOpenGL : public QObject
@@ -84,6 +86,10 @@ private slots:
     void bufferCreate();
     void bufferMapRange();
     void defaultQGLCurrentBuffer();
+    void makeCurrentAfterResizeWithNonDefaultFBOBound();
+#if QT_CONFIG(egl)
+    void dontCrashOnInvalidContextThreadTeardown();
+#endif
 };
 
 struct SharedResourceTracker
@@ -487,7 +493,7 @@ void tst_QOpenGL::fboTextureOwnership()
     QOpenGLFramebufferObjectFormat fboFormat;
     fboFormat.setAttachment(QOpenGLFramebufferObject::NoAttachment);
 
-    QOpenGLFramebufferObject *fbo = new QOpenGLFramebufferObject(200, 100, fboFormat);
+    const auto fbo = std::make_unique<QOpenGLFramebufferObject>(200, 100, fboFormat);
     QVERIFY(fbo->texture() != 0);
     fbo->bind();
 
@@ -511,7 +517,6 @@ void tst_QOpenGL::fboTextureOwnership()
     QFUZZY_COMPARE_IMAGES(fb, reference);
 
     ctx.functions()->glDeleteTextures(1, &texture);
-    delete fbo;
 }
 
 void tst_QOpenGL::fboRendering_data()
@@ -767,7 +772,7 @@ void tst_QOpenGL::fboHandleNulledAfterContextDestroyed()
     window.setGeometry(0, 0, 10, 10);
     window.create();
 
-    QOpenGLFramebufferObject *fbo = 0;
+    std::optional<QOpenGLFramebufferObject> fbo;
 
     {
         QOpenGLContext ctx;
@@ -778,11 +783,12 @@ void tst_QOpenGL::fboHandleNulledAfterContextDestroyed()
         if (!QOpenGLFramebufferObject::hasOpenGLFramebufferObjects())
             QSKIP("QOpenGLFramebufferObject not supported on this platform");
 
-        fbo = new QOpenGLFramebufferObject(128, 128);
+        fbo.emplace(128, 128);
 
         QVERIFY(fbo->handle() != 0);
     }
 
+    QVERIFY(fbo);
     QCOMPARE(fbo->handle(), 0U);
 }
 
@@ -1554,30 +1560,30 @@ void tst_QOpenGL::wglContextWrap()
 void tst_QOpenGL::vaoCreate()
 {
     QScopedPointer<QSurface> surface(createSurface(QSurface::Window));
-    QOpenGLContext *ctx = new QOpenGLContext;
-    ctx->create();
-    ctx->makeCurrent(surface.data());
+    QOpenGLContext ctx;
+    ctx.create();
+    ctx.makeCurrent(surface.data());
 
     QOpenGLVertexArrayObject vao;
     bool success = vao.create();
-    if (ctx->isOpenGLES()) {
-        if (ctx->format().majorVersion() >= 3 || ctx->hasExtension(QByteArrayLiteral("GL_OES_vertex_array_object")))
+    if (ctx.isOpenGLES()) {
+        if (ctx.format().majorVersion() >= 3 || ctx.hasExtension(QByteArrayLiteral("GL_OES_vertex_array_object")))
             QVERIFY(success);
     } else {
-        if (ctx->format().majorVersion() >= 3 || ctx->hasExtension(QByteArrayLiteral("GL_ARB_vertex_array_object")))
+        if (ctx.format().majorVersion() >= 3 || ctx.hasExtension(QByteArrayLiteral("GL_ARB_vertex_array_object")))
             QVERIFY(success);
     }
 
     vao.destroy();
-    ctx->doneCurrent();
+    ctx.doneCurrent();
 }
 
 void tst_QOpenGL::bufferCreate()
 {
     QScopedPointer<QSurface> surface(createSurface(QSurface::Window));
-    QOpenGLContext *ctx = new QOpenGLContext;
-    ctx->create();
-    ctx->makeCurrent(surface.data());
+    QOpenGLContext ctx;
+    ctx.create();
+    ctx.makeCurrent(surface.data());
 
     QOpenGLBuffer buf;
 
@@ -1604,17 +1610,17 @@ void tst_QOpenGL::bufferCreate()
     buf.destroy();
     QVERIFY(!buf.isCreated());
 
-    ctx->doneCurrent();
+    ctx.doneCurrent();
 }
 
 void tst_QOpenGL::bufferMapRange()
 {
     QScopedPointer<QSurface> surface(createSurface(QSurface::Window));
-    QOpenGLContext *ctx = new QOpenGLContext;
-    ctx->create();
-    ctx->makeCurrent(surface.data());
+    QOpenGLContext ctx;
+    ctx.create();
+    ctx.makeCurrent(surface.data());
 
-    QOpenGLExtensions funcs(ctx);
+    QOpenGLExtensions funcs(&ctx);
     if (!funcs.hasOpenGLExtension(QOpenGLExtensions::MapBufferRange))
         QSKIP("glMapBufferRange not supported");
 
@@ -1640,7 +1646,7 @@ void tst_QOpenGL::bufferMapRange()
     buf.unmap();
 
     buf.destroy();
-    ctx->doneCurrent();
+    ctx.doneCurrent();
 }
 
 void tst_QOpenGL::defaultQGLCurrentBuffer()
@@ -1749,6 +1755,105 @@ void tst_QOpenGL::clipRect()
 
     // Enable this once QTBUG-85286 is fixed
     //QCOMPARE(fb.pixelColor(clipRect.right(), clipRect.top() + 1), QColor(Qt::red));
+}
+
+#if QT_CONFIG(egl)
+void tst_QOpenGL::dontCrashOnInvalidContextThreadTeardown()
+{
+    class Thread : public QThread
+    {
+        void run() override
+        {
+            auto context = std::make_unique<QOpenGLContext>();
+            QVERIFY(context->create());
+            QScopedPointer<QSurface> surface(createSurface(int(QSurface::Window)));
+            QVERIFY(context->makeCurrent(surface.data()));
+            auto eglContext = context->nativeInterface<QNativeInterface::QEGLContext>();
+            if (!eglContext) {
+                QSKIP("Need an egl context for this test");
+            }
+            eglContext->invalidateContext();
+            context->doneCurrent();
+        }
+    };
+    Thread thread;
+    thread.start();
+    thread.wait();
+}
+#endif
+
+// QTBUG-143779: On macOS, when a window has been resized, QOpenGLContext::makeCurrent()
+// does a lazy update of the context, which recreates the window's default FBO and any
+// associcated structures. If client code has a different FBO bound at this point, the
+// update logic fails to set up these internal structures, and we end up crashing when
+// we later swap. This test checks that a makeCurrent after a resize doesn't crash, and
+// that the user's FBO is still bound.
+void tst_QOpenGL::makeCurrentAfterResizeWithNonDefaultFBOBound()
+{
+    if (QGuiApplication::platformName().startsWith(QLatin1String("wayland"), Qt::CaseInsensitive))
+        QSKIP("Wayland: fails has no empty window is shown on Wayland.");
+
+    class FBOWindow : public QWindow
+    {
+    public:
+        FBOWindow() {
+            QSurfaceFormat format;
+            format.setSamples(4);
+
+            setSurfaceType(QWindow::OpenGLSurface);
+            setFormat(format);
+            create();
+
+            context.reset(new QOpenGLContext);
+            context->setFormat(format);
+            QVERIFY(context->create());
+            QVERIFY(context->makeCurrent(this));
+            fbo.reset(new QOpenGLFramebufferObject(64, 64));
+            fbo->bind();
+        }
+
+        void exposeEvent(QExposeEvent *) override
+        {
+            if (!fbo)
+                return; // macOS 26.0-26.4 might send expose during makeCurrent
+
+            ++paintCount;
+
+            // If FBO was bound in a previous frame we shouldn't crash
+            QVERIFY(context->makeCurrent(this));
+
+            // makeCurrent shouldn't affect the bound FBO
+            QVERIFY(fbo->isBound());
+
+            // Temporarily bind the default FBO, and render to it
+            auto *f = context->functions();
+            fbo->release();
+            f->glClearColor(1.0, 0.0, 0.0, 1.0);
+            f->glClear(GL_COLOR_BUFFER_BIT);
+            context->swapBuffers(this);
+
+            // Then rebind the non-default FBO bound for next frame
+            fbo->bind();
+        }
+
+        QScopedPointer<QOpenGLContext> context;
+        QScopedPointer<QOpenGLFramebufferObject> fbo;
+        int paintCount = 0;
+    };
+
+    FBOWindow window;
+
+    if (!QOpenGLFramebufferObject::hasOpenGLFramebufferObjects())
+        QSKIP("QOpenGLFramebufferObject not supported on this platform");
+
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+
+    for (int i = 0; i < 10; ++i) {
+        int paintCount = window.paintCount;
+        window.resize(window.width() + 1, 600);
+        QTRY_VERIFY(window.paintCount > paintCount);
+    }
 }
 
 QTEST_MAIN(tst_QOpenGL)

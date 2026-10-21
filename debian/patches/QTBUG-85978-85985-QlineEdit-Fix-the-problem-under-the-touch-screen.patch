@@ -1,8 +1,12 @@
-Index: qt6-base/src/widgets/widgets/qlineedit.cpp
-===================================================================
---- qt6-base.orig/src/widgets/widgets/qlineedit.cpp
-+++ qt6-base/src/widgets/widgets/qlineedit.cpp
-@@ -1499,6 +1499,13 @@ void QLineEdit::mousePressEvent(QMouseEv
+
+
+Refreshed for Debian forky Qt 6.11.2.
+
+diff --git a/src/widgets/widgets/qlineedit.cpp b/src/widgets/widgets/qlineedit.cpp
+index bf267234..d02e5902 100644
+--- a/src/widgets/widgets/qlineedit.cpp
++++ b/src/widgets/widgets/qlineedit.cpp
+@@ -1501,6 +1501,13 @@ void QLineEdit::mousePressEvent(QMouseEvent* e)
  {
      Q_D(QLineEdit);
  
@@ -16,7 +20,7 @@ Index: qt6-base/src/widgets/widgets/qlineedit.cpp
      d->mousePressPos = e->position().toPoint();
  
      if (d->sendMouseEventToInputContext(e))
-@@ -1531,7 +1538,19 @@ void QLineEdit::mousePressEvent(QMouseEv
+@@ -1535,7 +1542,19 @@ void QLineEdit::mousePressEvent(QMouseEvent* e)
      } else
  #endif
      {
@@ -37,7 +41,7 @@ Index: qt6-base/src/widgets/widgets/qlineedit.cpp
      }
  }
  
-@@ -1574,6 +1593,26 @@ void QLineEdit::mouseMoveEvent(QMouseEve
+@@ -1578,6 +1597,26 @@ void QLineEdit::mouseMoveEvent(QMouseEvent * e)
              } else
  #endif
              {
@@ -64,7 +68,7 @@ Index: qt6-base/src/widgets/widgets/qlineedit.cpp
                  d->control->moveCursor(d->xToPos(e->position().toPoint().x()), select);
              }
          }
-@@ -1587,6 +1626,14 @@ void QLineEdit::mouseMoveEvent(QMouseEve
+@@ -1591,6 +1630,14 @@ void QLineEdit::mouseMoveEvent(QMouseEvent * e)
  void QLineEdit::mouseReleaseEvent(QMouseEvent* e)
  {
      Q_D(QLineEdit);
@@ -79,7 +83,7 @@ Index: qt6-base/src/widgets/widgets/qlineedit.cpp
      if (d->sendMouseEventToInputContext(e))
          return;
  #if QT_CONFIG(draganddrop)
-@@ -1619,6 +1666,8 @@ void QLineEdit::mouseReleaseEvent(QMouse
+@@ -1623,6 +1670,8 @@ void QLineEdit::mouseReleaseEvent(QMouseEvent* e)
  void QLineEdit::mouseDoubleClickEvent(QMouseEvent* e)
  {
      Q_D(QLineEdit);
@@ -88,7 +92,7 @@ Index: qt6-base/src/widgets/widgets/qlineedit.cpp
  
      if (e->button() == Qt::LeftButton) {
          int position = d->xToPos(e->position().toPoint().x());
-@@ -2189,6 +2238,10 @@ void QLineEdit::dropEvent(QDropEvent* e)
+@@ -2193,6 +2242,10 @@ void QLineEdit::dropEvent(QDropEvent* e)
  */
  void QLineEdit::contextMenuEvent(QContextMenuEvent *event)
  {
@@ -99,11 +103,11 @@ Index: qt6-base/src/widgets/widgets/qlineedit.cpp
      if (QMenu *menu = createStandardContextMenu()) {
          menu->setAttribute(Qt::WA_DeleteOnClose);
          menu->popup(event->globalPos());
-Index: qt6-base/src/widgets/widgets/qlineedit_p.cpp
-===================================================================
---- qt6-base.orig/src/widgets/widgets/qlineedit_p.cpp
-+++ qt6-base/src/widgets/widgets/qlineedit_p.cpp
-@@ -240,6 +240,13 @@ void QLineEditPrivate::init(const QStrin
+diff --git a/src/widgets/widgets/qlineedit_p.cpp b/src/widgets/widgets/qlineedit_p.cpp
+index 0a083bee..b5c9d0f7 100644
+--- a/src/widgets/widgets/qlineedit_p.cpp
++++ b/src/widgets/widgets/qlineedit_p.cpp
+@@ -241,6 +241,13 @@ void QLineEditPrivate::init(const QString& txt)
  
      q->setAttribute(Qt::WA_MacShowFocusRect);
  
@@ -117,11 +121,11 @@ Index: qt6-base/src/widgets/widgets/qlineedit_p.cpp
      initMouseYThreshold();
  }
  
-Index: qt6-base/src/widgets/widgets/qlineedit_p.h
-===================================================================
---- qt6-base.orig/src/widgets/widgets/qlineedit_p.h
-+++ qt6-base/src/widgets/widgets/qlineedit_p.h
-@@ -181,6 +181,12 @@ public:
+diff --git a/src/widgets/widgets/qlineedit_p.h b/src/widgets/widgets/qlineedit_p.h
+index 5d761d2f..43471e5e 100644
+--- a/src/widgets/widgets/qlineedit_p.h
++++ b/src/widgets/widgets/qlineedit_p.h
+@@ -182,6 +182,12 @@ public:
      uint clickCausedFocus : 1;
      uint edited : 1;
      int hscroll;

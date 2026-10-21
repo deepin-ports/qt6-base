@@ -1215,8 +1215,6 @@ void QPdfEngine::setupGraphicsState(QPaintEngine::DirtyFlags flags)
         setPen();
 }
 
-extern QPainterPath qt_regionToPath(const QRegion &region);
-
 void QPdfEngine::updateClipPath(const QPainterPath &p, Qt::ClipOperation op)
 {
     Q_D(QPdfEngine);
@@ -1742,6 +1740,8 @@ void QPdfEnginePrivate::writeInfo(const QDateTime &date)
     printString(title);
     write("\n/Creator ");
     printString(creator);
+    write("\n/Author ");
+    printString(author);
     write("\n/Producer ");
     printString(QString::fromLatin1("Qt " QT_VERSION_STR));
 
@@ -1783,7 +1783,7 @@ void QPdfEnginePrivate::writeInfo(const QDateTime &date)
     write(formattedDate);
 
     write("\n/Trapped /False\n"
-          "2\n"
+          ">>\n"
           "endobj\n");
 }
 
@@ -1847,6 +1847,13 @@ int QPdfEnginePrivate::writeXmpDocumentMetaData(const QDateTime &date)
                     w.writeEndElement();
                 w.writeEndElement();
             w.writeEndElement();
+            w.writeStartElement(dcNS, "creator");
+                w.writeStartElement(rdfNS, "Seq");
+                    w.writeStartElement(rdfNS, "li");
+                        w.writeCharacters(author);
+                    w.writeEndElement();
+                w.writeEndElement();
+            w.writeEndElement();
         w.writeEndElement();
 
         // PDF
@@ -1903,7 +1910,7 @@ int QPdfEnginePrivate::writeXmpDocumentMetaData(const QDateTime &date)
 
     xprintf("<<\n"
             "/Type /Metadata /Subtype /XML\n"
-            "/Length %d\n"
+            "/Length %" PRIdQSIZETYPE "\n"
             ">>\n"
             "stream\n", metaDataContent.size());
     write(metaDataContent);
@@ -2016,7 +2023,7 @@ void QPdfEnginePrivate::writePageRoot()
     xprintf("]\n");
 
     //xprintf("/Group <</S /Transparency /I true /K false>>\n");
-    xprintf("/Count %d\n", pages.size());
+    xprintf("/Count %" PRIdQSIZETYPE "\n", pages.size());
 
     xprintf("/ProcSet [/PDF /Text /ImageB /ImageC]\n"
             ">>\n"
@@ -2212,7 +2219,7 @@ void QPdfEnginePrivate::embedFont(QFontSubset *font)
     {
         addXrefEntry(toUnicode);
         QByteArray touc = font->createToUnicodeMap();
-        xprintf("<< /Length %d >>\n"
+        xprintf("<< /Length %" PRIdQSIZETYPE " >>\n"
                 "stream\n", touc.size());
         write(touc);
         write("\nendstream\n"
@@ -2248,7 +2255,7 @@ void QPdfEnginePrivate::embedFont(QFontSubset *font)
 
         addXrefEntry(cidset);
         xprintf("<<\n");
-        xprintf("/Length %d\n", cidSetStream.size());
+        xprintf("/Length %" PRIdQSIZETYPE "\n", cidSetStream.size());
         xprintf(">>\n");
         xprintf("stream\n");
         write(cidSetStream);
@@ -2395,7 +2402,7 @@ void QPdfEnginePrivate::writeTail()
 
     addXrefEntry(xrefPositions.size(),false);
     xprintf("xref\n"
-            "0 %d\n"
+            "0 %" PRIdQSIZETYPE "\n"
             "%010d 65535 f \n", xrefPositions.size()-1, xrefPositions[0]);
 
     for (int i = 1; i < xrefPositions.size()-1; ++i)
@@ -3068,7 +3075,7 @@ int QPdfEnginePrivate::addConstantAlphaObject(int brushAlpha, int penAlpha)
 {
     if (brushAlpha == 255 && penAlpha == 255)
         return 0;
-    uint object = alphaCache.value(QPair<uint, uint>(brushAlpha, penAlpha), 0);
+    uint object = alphaCache.value(std::pair<uint, uint>(brushAlpha, penAlpha), 0);
     if (!object) {
         object = addXrefEntry(-1);
         QByteArray alphaDef;
@@ -3076,7 +3083,7 @@ int QPdfEnginePrivate::addConstantAlphaObject(int brushAlpha, int penAlpha)
         s << "<<\n/ca " << (brushAlpha/qreal(255.)) << '\n';
         s << "/CA " << (penAlpha/qreal(255.)) << "\n>>";
         xprintf("%s\nendobj\n", alphaDef.constData());
-        alphaCache.insert(QPair<uint, uint>(brushAlpha, penAlpha), object);
+        alphaCache.insert(std::pair<uint, uint>(brushAlpha, penAlpha), object);
     }
     if (currentPage->graphicStates.indexOf(object) < 0)
         currentPage->graphicStates.append(object);
@@ -3185,6 +3192,7 @@ static inline bool is_monochrome(const QList<QRgb> &colorTable)
 }
 
 /*!
+ * \internal
  * Adds an image to the pdf and return the pdf-object id. Returns -1 if adding the image failed.
  */
 int QPdfEnginePrivate::addImage(const QImage &img, bool *bitmap, bool lossless, qint64 serial_no)
@@ -3206,6 +3214,7 @@ int QPdfEnginePrivate::addImage(const QImage &img, bool *bitmap, bool lossless, 
             // a format without alpha channel first
 
             QImage alphaLessImage(image.width(), image.height(), QImage::Format_RGB32);
+            alphaLessImage.setDevicePixelRatio(image.devicePixelRatioF());
             alphaLessImage.fill(Qt::white);
 
             QPainter p(&alphaLessImage);
@@ -3404,7 +3413,7 @@ void QPdfEnginePrivate::drawTextItem(const QPointF &p, const QTextItemInt &ti)
                 xprintf("/F 4\n"); // enable print flag, disable all other
 
             xprintf("/Rect [");
-            xprintf(rectData.constData());
+            write(rectData.constData());
 #ifdef Q_DEBUG_PDF_LINKS
             xprintf("]\n/Border [16 16 1]\n");
 #else

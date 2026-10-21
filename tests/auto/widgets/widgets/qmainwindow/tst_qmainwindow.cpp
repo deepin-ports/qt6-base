@@ -1657,8 +1657,8 @@ struct AddDockWidget
     QString name;
     Mode mode;
 
-    Qt::Orientation o;
-    Qt::DockWidgetArea a;
+    Qt::Orientation o = {};
+    Qt::DockWidgetArea a = {};
     QString other;
 
     void apply(QMainWindow *mw) const;
@@ -1688,9 +1688,11 @@ void AddDockWidget::apply(QMainWindow *mw) const
             mw->addDockWidget(a, dw);
             break;
         case SplitMode:
+            mw->addDockWidget(Qt::BottomDockWidgetArea, dw);
             mw->splitDockWidget(other, dw, o);
             break;
         case TabMode:
+            mw->addDockWidget(Qt::BottomDockWidgetArea, dw);
             mw->tabifyDockWidget(other, dw);
             break;
     }

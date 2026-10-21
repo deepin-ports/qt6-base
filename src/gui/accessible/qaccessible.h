@@ -15,7 +15,6 @@
 #if QT_CONFIG(accessibility)
 
 #include <QtCore/qcoreapplication.h>
-#include <QtCore/qdebug.h>
 #include <QtCore/qglobal.h>
 #include <QtCore/qlist.h>
 #include <QtCore/qobject.h>
@@ -28,6 +27,7 @@
 
 QT_BEGIN_NAMESPACE
 
+class QDebug;
 class QAccessibleInterface;
 class QAccessibleEvent;
 class QWindow;
@@ -58,7 +58,7 @@ public:
     virtual QWindow *window() const;
 
     // relations
-    virtual QList<QPair<QAccessibleInterface *, QAccessible::Relation>>
+    virtual QList<std::pair<QAccessibleInterface *, QAccessible::Relation>>
     relations(QAccessible::Relation match = QAccessible::AllRelations) const;
     virtual QAccessibleInterface *focusChild() const;
 
@@ -305,7 +305,8 @@ public:
     inline QAccessibleEvent(QObject *obj, QAccessible::Event typ)
         : m_type(typ), m_object(obj), m_child(-1)
     {
-        Q_ASSERT(obj);
+        if (m_type != QAccessible::ObjectDestroyed)
+            Q_ASSERT(obj);
         // All events below have a subclass of QAccessibleEvent.
         // Use the subclass, since it's expected that it's possible to cast to that.
         Q_ASSERT(m_type != QAccessible::ValueChanged);
@@ -342,7 +343,7 @@ public:
     QObject *object() const { return m_object; }
     QAccessible::Id uniqueId() const;
 
-    void setChild(int chld) { m_child = chld; }
+    void setChild(int chld);
     int child() const { return m_child; }
 
     virtual QAccessibleInterface *accessibleInterface() const;
@@ -630,7 +631,8 @@ public:
 
     QString message() const { return m_message; }
     QAccessible::AnnouncementPoliteness politeness() const { return m_politeness; }
-    void setPoliteness(QAccessible::AnnouncementPoliteness politeness) { m_politeness = politeness; };
+    void setPoliteness(QAccessible::AnnouncementPoliteness politeness)
+    { m_politeness = politeness; }
 
 protected:
     QString m_message;

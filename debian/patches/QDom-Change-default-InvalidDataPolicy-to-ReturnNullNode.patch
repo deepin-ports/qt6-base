@@ -3,13 +3,13 @@ Date:   Fri Jun 26 13:44:42 2026
 Subject: QDom: Change default InvalidDataPolicy to ReturnNullNode
 Upstream: https://codereview.qt-project.org/c/qt/qtbase/+/748323
 
+Refreshed for Debian forky Qt 6.11.2.
 
----
-Index: qt6-base/src/xml/dom/qdom.cpp
-===================================================================
---- qt6-base.orig/src/xml/dom/qdom.cpp
-+++ qt6-base/src/xml/dom/qdom.cpp
-@@ -91,7 +91,7 @@ static void qt_split_namespace(QString&
+diff --git a/src/xml/dom/qdom.cpp b/src/xml/dom/qdom.cpp
+index 9ff8da2a..cc9635ad 100644
+--- a/src/xml/dom/qdom.cpp
++++ b/src/xml/dom/qdom.cpp
+@@ -92,7 +92,7 @@ static void qt_split_namespace(QString& prefix, QString& name, const QString& qN
   *
   **************************************************************/
  QDomImplementation::InvalidDataPolicy QDomImplementationPrivate::invalidDataPolicy
@@ -18,7 +18,7 @@ Index: qt6-base/src/xml/dom/qdom.cpp
  
  // [5] Name ::= (Letter | '_' | ':') (NameChar)*
  
-@@ -541,11 +541,12 @@ bool QDomImplementation::isNull()
+@@ -542,11 +542,12 @@ bool QDomImplementation::isNull()
      This enum specifies what should be done when a factory function
      in QDomDocument is called with invalid data.
      \value AcceptInvalidChars The data should be stored in the DOM object

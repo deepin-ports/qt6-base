@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GFDL-1.3-no-invariants-only
 
 /*!
-    \page qttest-best-practices.qdoc
+    \page qttest-best-practices.html
 
     \title Qt Test Best Practices
 
@@ -126,6 +126,19 @@
     tests, but preferably be instantiated on the stack to ensure proper
     cleanup even if a test fails, so that tests do not interfere with
     each other.
+
+    If your test involves making global changes, take care to ensure the prior
+    state is restored at the end of the test, whether it passes or fails. Since
+    failure prevents code later than the failing check from running, restoring
+    at the end of the test doesn't work when the test fails. The robust way to
+    restore even on failure is to instantiate an RAII object whose destructor
+    restores the prior state.  This can often be conveniently done using \l
+    qScopeGuard, for example
+
+    \snippet code/src_qtestlib_qtestcase.cpp 36
+
+    before the first call to \l QLocale::setDefault() in a test that needs to
+    control the locale used by the code under test.
 
     \section2 Test the Full Stack
 

@@ -1,8 +1,12 @@
-Index: qt6-base/src/widgets/itemviews/qabstractitemview.cpp
-===================================================================
---- qt6-base.orig/src/widgets/itemviews/qabstractitemview.cpp
-+++ qt6-base/src/widgets/itemviews/qabstractitemview.cpp
-@@ -4317,7 +4317,11 @@ QItemSelectionModel::SelectionFlags QAbs
+
+
+Refreshed for Debian forky Qt 6.11.2.
+
+diff --git a/src/widgets/itemviews/qabstractitemview.cpp b/src/widgets/itemviews/qabstractitemview.cpp
+index 241faea2..b81fb057 100644
+--- a/src/widgets/itemviews/qabstractitemview.cpp
++++ b/src/widgets/itemviews/qabstractitemview.cpp
+@@ -4411,7 +4411,11 @@ QItemSelectionModel::SelectionFlags QAbstractItemViewPrivate::extendedSelectionC
          return QItemSelectionModel::Toggle|selectionBehaviorFlags();
      if (state == QAbstractItemView::DragSelectingState) {
          //when drag-selecting we need to clear any previous selection and select the current one

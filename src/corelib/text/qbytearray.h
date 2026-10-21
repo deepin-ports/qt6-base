@@ -1,6 +1,7 @@
 // Copyright (C) 2022 The Qt Company Ltd.
 // Copyright (C) 2016 Intel Corporation.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:data-parser
 
 #ifndef QBYTEARRAY_H
 #define QBYTEARRAY_H
@@ -103,7 +104,7 @@ public:
     inline void swap(QByteArray &other) noexcept
     { d.swap(other.d); }
 
-    bool isEmpty() const noexcept { return size() == 0; }
+    constexpr bool isEmpty() const noexcept { return size() == 0; }
     void resize(qsizetype size);
     void resize(qsizetype size, char c);
     void resizeForOverwrite(qsizetype size);
@@ -118,6 +119,18 @@ public:
     inline operator const char *() const;
     inline operator const void *() const;
 #endif
+
+    // Some compilers consider this conversion ambiguous, so
+    // we're not offering it there:
+    // * QCC 8.3 on QNX
+    // * GHS 2022.1.4 on INTEGRITY
+#if (!defined(Q_OS_QNX) || !defined(Q_CC_GNU_ONLY) || Q_CC_GNU_ONLY > 803) && \
+    (!defined(Q_CC_GHS) || !defined(__GHS_VERSION_NUMBER) || __GHS_VERSION_NUMBER > 202214)
+# define QT_BYTEARRAY_CONVERTS_TO_STD_STRING_VIEW
+    Q_IMPLICIT operator std::string_view() const noexcept
+    { return std::string_view(data(), std::size_t(size())); }
+#endif
+
     inline char *data();
     inline const char *data() const noexcept;
     const char *constData() const noexcept { return data(); }
@@ -216,7 +229,7 @@ public:
     [[nodiscard]] QByteArray sliced(qsizetype pos, qsizetype n) &&
     { verify(pos, n); return sliced_helper(*this, pos, n); }
     [[nodiscard]] QByteArray chopped(qsizetype len) &&
-    { verify(0, len); return std::move(*this).first(size() - len); }
+    { verify(0, len); chop(len); return std::move(*this); }
 #endif
 
     bool startsWith(QByteArrayView bv) const
@@ -306,7 +319,9 @@ public:
     template <typename InputIterator, if_input_iterator<InputIterator> = true>
     QByteArray &assign(InputIterator first, InputIterator last)
     {
-        d.assign(first, last);
+        if constexpr (std::is_same_v<InputIterator, iterator> || std::is_same_v<InputIterator, const_iterator>)
+            return assign(QByteArrayView(first, last));
+        d->assign(first, last);
         if (d.data())
             d.data()[d.size] = '\0';
         return *this;
@@ -385,7 +400,14 @@ public:
     QByteArray toPercentEncoding(const QByteArray &exclude = QByteArray(),
                                  const QByteArray &include = QByteArray(),
                                  char percent = '%') const;
+#if QT_CORE_REMOVED_SINCE(6, 11)
     [[nodiscard]] QByteArray percentDecoded(char percent = '%') const;
+#else
+    [[nodiscard]] QByteArray percentDecoded(char percent = '%') const &
+    { return fromPercentEncoding(*this, percent); }
+    [[nodiscard]] QByteArray percentDecoded(char percent = '%') &&
+    { return fromPercentEncoding(std::move(*this), percent); }
+#endif
 
     inline QByteArray &setNum(short, int base = 10);
     inline QByteArray &setNum(ushort, int base = 10);
@@ -408,7 +430,7 @@ public:
     [[nodiscard]] static QByteArray number(double, char format = 'g', int precision = 6);
     [[nodiscard]] static QByteArray fromRawData(const char *data, qsizetype size)
     {
-        return QByteArray(DataPointer(nullptr, const_cast<char *>(data), size));
+        return QByteArray(DataPointer::fromRawData(data, size));
     }
 
     class FromBase64Result;
@@ -417,6 +439,7 @@ public:
     [[nodiscard]] static QByteArray fromBase64(const QByteArray &base64, Base64Options options = Base64Encoding);
     [[nodiscard]] static QByteArray fromHex(const QByteArray &hexEncoded);
     [[nodiscard]] static QByteArray fromPercentEncoding(const QByteArray &pctEncoded, char percent = '%');
+    [[nodiscard]] static QByteArray fromPercentEncoding(QByteArray &&pctEncoded, char percent = '%');
 
 #if defined(Q_OS_DARWIN) || defined(Q_QDOC)
     static QByteArray fromCFData(CFDataRef data);
@@ -495,13 +518,18 @@ public:
         // -1 to deal with the NUL terminator
         return Data::maxSize() - 1;
     }
-    inline qsizetype size() const noexcept { return d.size; }
+    constexpr qsizetype size() const noexcept
+    {
+        constexpr size_t MaxSize = maxSize();
+        Q_PRESUME(size_t(d.size) <= MaxSize);
+        return d.size;
+    }
 #if QT_DEPRECATED_SINCE(6, 4)
     QT_DEPRECATED_VERSION_X_6_4("Use size() or length() instead.")
-    inline qsizetype count() const noexcept { return size(); }
+    constexpr qsizetype count() const noexcept { return size(); }
 #endif
-    inline qsizetype length() const noexcept { return size(); }
-    QT_CORE_INLINE_SINCE(6, 4)
+    constexpr qsizetype length() const noexcept { return size(); }
+    QT_CORE_CONSTEXPR_INLINE_SINCE(6, 4)
     bool isNull() const noexcept;
 
     inline const DataPointer &data_ptr() const { return d; }
@@ -510,6 +538,10 @@ public:
     explicit inline QByteArray(const DataPointer &dd) : d(dd) {}
 #endif
     explicit inline QByteArray(DataPointer &&dd) : d(std::move(dd)) {}
+
+    [[nodiscard]] QByteArray nullTerminated() const &;
+    [[nodiscard]] QByteArray nullTerminated() &&;
+    QByteArray &nullTerminate();
 
 private:
     friend bool comparesEqual(const QByteArray &lhs, const QByteArrayView &rhs) noexcept
@@ -521,7 +553,6 @@ private:
         return Qt::compareThreeWay(res, 0);
     }
     Q_DECLARE_STRONGLY_ORDERED(QByteArray)
-    Q_DECLARE_STRONGLY_ORDERED(QByteArray, QByteArrayView)
     Q_DECLARE_STRONGLY_ORDERED(QByteArray, const char *)
 #if defined(__GLIBCXX__) && defined(__cpp_lib_three_way_comparison)
     // libstdc++ has a bug [0] when `operator const void *()` is preferred over
@@ -687,6 +718,18 @@ inline QByteArray operator+(const char *a1, const QByteArray &a2)
 { return QByteArray(a1) += a2; }
 inline QByteArray operator+(char a1, const QByteArray &a2)
 { return QByteArray(&a1, 1) += a2; }
+Q_WEAK_OVERLOAD
+inline QByteArray operator+(const QByteArray &lhs, QByteArrayView rhs)
+{
+    QByteArray tmp{lhs.size() + rhs.size(), Qt::Uninitialized};
+    return tmp.assign(lhs).append(rhs);
+}
+Q_WEAK_OVERLOAD
+inline QByteArray operator+(QByteArrayView lhs, const QByteArray &rhs)
+{
+    QByteArray tmp{lhs.size() + rhs.size(), Qt::Uninitialized};
+    return tmp.assign(lhs).append(rhs);
+}
 #endif // QT_USE_QSTRINGBUILDER
 
 inline QByteArray &QByteArray::setNum(short n, int base)
@@ -705,6 +748,7 @@ inline QByteArray &QByteArray::setNum(float n, char format, int precision)
 { return setNum(double(n), format, precision); }
 
 #if QT_CORE_INLINE_IMPL_SINCE(6, 4)
+QT_CORE_CONSTEXPR_INLINE_SINCE(6, 4)
 bool QByteArray::isNull() const noexcept
 {
     return d.isNull();
@@ -751,14 +795,9 @@ public:
 
     explicit operator bool() const noexcept { return decodingStatus == QByteArray::Base64DecodingStatus::Ok; }
 
-#if defined(Q_COMPILER_REF_QUALIFIERS) && !defined(Q_QDOC)
     QByteArray &operator*() & noexcept { return decoded; }
     const QByteArray &operator*() const & noexcept { return decoded; }
     QByteArray &&operator*() && noexcept { return std::move(decoded); }
-#else
-    QByteArray &operator*() noexcept { return decoded; }
-    const QByteArray &operator*() const noexcept { return decoded; }
-#endif
 
     friend inline bool operator==(const QByteArray::FromBase64Result &lhs, const QByteArray::FromBase64Result &rhs) noexcept
     {

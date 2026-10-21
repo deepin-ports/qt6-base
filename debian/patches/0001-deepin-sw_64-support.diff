@@ -3,17 +3,7 @@ From: hudeng <hudeng@deepin.org>
 Date: Wed, 9 Jul 2025 18:46:19 +0800
 Subject: [PATCH] feat: add sw64 support
 
----
- .../double-conversion/double-conversion/utils.h  |  4 ++--
- src/3rdparty/forkfd/forkfd_linux.c               |  2 +-
- src/3rdparty/sha3/brg_endian.h                   |  2 +-
- src/corelib/global/archdetect.cpp                |  2 ++
- src/corelib/global/qprocessordetection.h         |  4 ++++
- src/corelib/global/qprocessordetection.qdoc      |  9 +++++++++
- src/corelib/io/qfilesystemwatcher_inotify.cpp    |  2 +-
- src/corelib/plugin/qelfparser_p.cpp              |  5 +++++
- src/testlib/3rdparty/cycle/cycle_p.h             | 16 ++++++++++++++++
- 9 files changed, 41 insertions(+), 5 deletions(-)
+Refreshed for Debian forky Qt 6.11.2.
 
 diff --git a/src/3rdparty/double-conversion/double-conversion/utils.h b/src/3rdparty/double-conversion/double-conversion/utils.h
 index 4f4dd71b..ac914f78 100644
@@ -36,15 +26,15 @@ index 4f4dd71b..ac914f78 100644
  #elif defined(__mc68000__) || \
      defined(__pnacl__) || defined(__native_client__)
 diff --git a/src/3rdparty/forkfd/forkfd_linux.c b/src/3rdparty/forkfd/forkfd_linux.c
-index 40b02657..f0eed06c 100644
+index 0ad50080..166c08c3 100644
 --- a/src/3rdparty/forkfd/forkfd_linux.c
 +++ b/src/3rdparty/forkfd/forkfd_linux.c
 @@ -85,7 +85,7 @@ static int sys_clone(unsigned long cloneflags, int *ptid)
  #elif defined(__arc__) || defined(__arm__) || defined(__aarch64__) || defined(__mips__) || \
      defined(__nds32__) || defined(__hppa__) || defined(__powerpc__) || defined(__i386__) || \
      defined(__x86_64__) || defined(__xtensa__) || defined(__alpha__) || defined(__riscv) || \
--    defined(__loongarch__)
-+    defined(__loongarch__) || defined(__sw_64__)
+-    defined(__loongarch__) || defined(__sparc__) || defined(__m68k__)
++    defined(__loongarch__) || defined(__sparc__) || defined(__m68k__) || defined(__sw_64__)
      /* ctid and newtls are inverted on CONFIG_CLONE_BACKWARDS architectures,
       * but since both values are 0, there's no harm. */
      return syscall(__NR_clone, cloneflags, child_stack, ptid, ctid, newtls);
@@ -62,10 +52,10 @@ index 0baac93d..3842bbaa 100644
  
  #elif defined( AMIGA )   || defined( applec )    || defined( __AS400__ )  || \
 diff --git a/src/corelib/global/archdetect.cpp b/src/corelib/global/archdetect.cpp
-index 6a1e110a..5e16e1fe 100644
+index 89f0c112..9310e991 100644
 --- a/src/corelib/global/archdetect.cpp
 +++ b/src/corelib/global/archdetect.cpp
-@@ -7,6 +7,8 @@
+@@ -8,6 +8,8 @@
  // main part: processor type
  #if defined(Q_PROCESSOR_ALPHA)
  #  define ARCH_PROCESSOR "alpha"
@@ -75,10 +65,10 @@ index 6a1e110a..5e16e1fe 100644
  #  define ARCH_PROCESSOR "arm"
  #elif defined(Q_PROCESSOR_ARM_64)
 diff --git a/src/corelib/global/qprocessordetection.h b/src/corelib/global/qprocessordetection.h
-index bb4759c4..b7ed91a9 100644
+index 2e47854d..a3b029f5 100644
 --- a/src/corelib/global/qprocessordetection.h
 +++ b/src/corelib/global/qprocessordetection.h
-@@ -141,6 +141,10 @@
+@@ -146,6 +146,10 @@
  // #elif defined(__bfin__)
  // #  define Q_PROCESSOR_BLACKFIN
  // #  define Q_BYTE_ORDER Q_LITTLE_ENDIAN
@@ -110,10 +100,10 @@ index e6605fb9..6313e68c 100644
      \macro Q_PROCESSOR_ARM
      \relates <QtProcessorDetection>
 diff --git a/src/corelib/io/qfilesystemwatcher_inotify.cpp b/src/corelib/io/qfilesystemwatcher_inotify.cpp
-index e60f6881..5df6265c 100644
+index 4971b41c..cef5e7d5 100644
 --- a/src/corelib/io/qfilesystemwatcher_inotify.cpp
 +++ b/src/corelib/io/qfilesystemwatcher_inotify.cpp
-@@ -55,7 +55,7 @@
+@@ -56,7 +56,7 @@
  # define __NR_inotify_add_watch 285
  # define __NR_inotify_rm_watch  286
  # define __NR_inotify_init1     324
@@ -123,10 +113,10 @@ index e60f6881..5df6265c 100644
  # define __NR_inotify_add_watch 445
  # define __NR_inotify_rm_watch  446
 diff --git a/src/corelib/plugin/qelfparser_p.cpp b/src/corelib/plugin/qelfparser_p.cpp
-index 7f6271cd..aef69bd2 100644
+index d251d647..7586eb2d 100644
 --- a/src/corelib/plugin/qelfparser_p.cpp
 +++ b/src/corelib/plugin/qelfparser_p.cpp
-@@ -113,6 +113,8 @@ struct ElfMachineCheck
+@@ -114,6 +114,8 @@ struct ElfMachineCheck
              // nothing
  #elif defined(Q_PROCESSOR_ALPHA)
              EM_ALPHA
@@ -135,7 +125,7 @@ index 7f6271cd..aef69bd2 100644
  #elif defined(Q_PROCESSOR_ARM_32)
              EM_ARM
  #elif defined(Q_PROCESSOR_ARM_64)
-@@ -384,6 +386,9 @@ Q_DECL_UNUSED Q_DECL_COLD_FUNCTION static QDebug &operator<<(QDebug &d, ElfHeade
+@@ -385,6 +387,9 @@ Q_DECL_UNUSED Q_DECL_COLD_FUNCTION static QDebug &operator<<(QDebug &d, ElfHeade
      // list definitely not exhaustive!
      case EM_NONE:       d << ", no machine"; break;
      case EM_ALPHA:      d << ", Alpha"; break;
@@ -146,10 +136,10 @@ index 7f6271cd..aef69bd2 100644
      case EM_ARM:        d << ", ARM"; break;
      case EM_AARCH64:    d << ", AArch64"; break;
 diff --git a/src/testlib/3rdparty/cycle/cycle_p.h b/src/testlib/3rdparty/cycle/cycle_p.h
-index f281c55d..dc4b9644 100644
+index 04cd7044..0f7bc0ee 100644
 --- a/src/testlib/3rdparty/cycle/cycle_p.h
 +++ b/src/testlib/3rdparty/cycle/cycle_p.h
-@@ -412,6 +412,22 @@ INLINE_ELAPSED(__inline__)
+@@ -416,6 +416,22 @@ INLINE_ELAPSED(__inline__)
  #define HAVE_TICK_COUNTER
  #endif
  
@@ -172,6 +162,3 @@ index f281c55d..dc4b9644 100644
  /*----------------------------------------------------------------*/
  #if defined(__GNUC__) && defined(__sparc_v9__) && !defined(HAVE_TICK_COUNTER)
  typedef unsigned long ticks;
--- 
-2.47.2
-

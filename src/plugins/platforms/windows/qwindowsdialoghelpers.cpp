@@ -1,5 +1,6 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #define QT_NO_URL_CAST_FROM_STRING 1
 
@@ -36,6 +37,8 @@
 
 #include <algorithm>
 #include <vector>
+
+using namespace std::chrono_literals;
 
 // #define USE_NATIVE_COLOR_DIALOG /* Testing purposes only */
 
@@ -269,7 +272,7 @@ bool QWindowsDialogHelperBase<BaseClass>::show(Qt::WindowFlags,
     // timer is stopped and dialog->exec() is called directly.
     cleanupThread();
     if (modal) {
-        m_timerId = this->startTimer(0);
+        m_timer.start(0ns, this);
     } else {
         startDialogThread();
     }
@@ -289,10 +292,7 @@ void QWindowsDialogHelperBase<BaseClass>::startDialogThread()
 template <class BaseClass>
 void QWindowsDialogHelperBase<BaseClass>::stopTimer()
 {
-    if (m_timerId) {
-        this->killTimer(m_timerId);
-        m_timerId = 0;
-    }
+    m_timer.stop();
 }
 
 template <class BaseClass>

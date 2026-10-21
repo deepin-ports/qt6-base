@@ -1,5 +1,6 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 //#define QHTTPTHREADDELEGATE_DEBUG
 #include "qhttpthreaddelegate_p.h"
@@ -171,6 +172,11 @@ QThreadStorage<QNetworkAccessCache *> QHttpThreadDelegate::connections;
 
 QHttpThreadDelegate::~QHttpThreadDelegate()
 {
+    if (!notifiedFinished) {
+        emit error(QNetworkReply::OperationCanceledError, QStringLiteral("Operation canceled"));
+        emit downloadFinished();
+    }
+
     // It could be that the main thread has asked us to shut down, so we need to delete the HTTP reply
     if (httpReply) {
         delete httpReply;
@@ -267,7 +273,7 @@ void QHttpThreadDelegate::startRequest()
 
 #if QT_CONFIG(ssl)
     // See qnetworkreplyhttpimpl, delegate's initialization code.
-    Q_ASSERT(!ssl || incomingSslConfiguration.data());
+    Q_ASSERT(!ssl || incomingSslConfiguration);
 #endif // QT_CONFIG(ssl)
 
     const bool isH2 = httpRequest.isHTTP2Allowed() || httpRequest.isHTTP2Direct();
@@ -326,6 +332,8 @@ void QHttpThreadDelegate::startRequest()
             || connectionType == QHttpNetworkConnection::ConnectionTypeHTTP2Direct) {
             httpConnection->setHttp2Parameters(http2Parameters);
         }
+
+        httpConnection->setTcpKeepAliveParameters(tcpKeepAliveParameters);
 #ifndef QT_NO_SSL
         // Set the QSslConfiguration from this QNetworkRequest.
         if (ssl)
@@ -487,6 +495,21 @@ void QHttpThreadDelegate::readyReadSlot()
     }
 }
 
+static QString makeServerErrorString(int code, const QUrl &url, const QString &reasonPhrase)
+{
+    QString msg;
+    if (!reasonPhrase.isEmpty()) {
+        msg = QLatin1StringView(QT_TRANSLATE_NOOP("QNetworkReply",
+                                                  "Error transferring %1 - server replied: %2"))
+                      .arg(url.toString(), reasonPhrase);
+    } else {
+        msg = QLatin1StringView(QT_TRANSLATE_NOOP("QNetworkReply",
+                                                  "Error transferring %1 - server replied with status code %2"))
+                      .arg(url.toString(), QString::number(code));
+    }
+    return msg;
+}
+
 void QHttpThreadDelegate::finishedSlot()
 {
     if (!httpReply)
@@ -508,17 +531,17 @@ void QHttpThreadDelegate::finishedSlot()
 #endif
 
     if (httpReply->statusCode() >= 400) {
-            // it's an error reply
-            QString msg = QLatin1StringView(QT_TRANSLATE_NOOP("QNetworkReply",
-                                                              "Error transferring %1 - server replied: %2"));
-            msg = msg.arg(httpRequest.url().toString(), httpReply->reasonPhrase());
-            emit error(statusCodeFromHttp(httpReply->statusCode(), httpRequest.url()), msg);
-        }
+        // it's an error reply
+        QString msg = makeServerErrorString(httpReply->statusCode(), httpRequest.url(),
+                                            httpReply->reasonPhrase());
+        emit error(statusCodeFromHttp(httpReply->statusCode(), httpRequest.url()), msg);
+    }
 
     if (httpRequest.isFollowRedirects() && httpReply->isRedirecting())
         emit redirected(httpReply->redirectUrl(), httpReply->statusCode(), httpReply->request().redirectCount() - 1);
 
     emit downloadFinished();
+    notifiedFinished = true;
 
     QMetaObject::invokeMethod(httpReply, "deleteLater", Qt::QueuedConnection);
     QMetaObject::invokeMethod(this, "deleteLater", Qt::QueuedConnection);
@@ -534,16 +557,16 @@ void QHttpThreadDelegate::synchronousFinishedSlot()
     qDebug() << "QHttpThreadDelegate::synchronousFinishedSlot() thread=" << QThread::currentThreadId() << "result=" << httpReply->statusCode();
 #endif
     if (httpReply->statusCode() >= 400) {
-            // it's an error reply
-            QString msg = QLatin1StringView(QT_TRANSLATE_NOOP("QNetworkReply",
-                                                              "Error transferring %1 - server replied: %2"));
-            incomingErrorDetail = msg.arg(httpRequest.url().toString(), httpReply->reasonPhrase());
-            incomingErrorCode = statusCodeFromHttp(httpReply->statusCode(), httpRequest.url());
+        // it's an error reply
+        incomingErrorDetail = makeServerErrorString(httpReply->statusCode(), httpRequest.url(),
+                                                    httpReply->reasonPhrase());
+        incomingErrorCode = statusCodeFromHttp(httpReply->statusCode(), httpRequest.url());
     }
 
     isCompressed = httpReply->isCompressed();
     synchronousDownloadData = httpReply->readAll();
 
+    notifiedFinished = true;
     QMetaObject::invokeMethod(httpReply, "deleteLater", Qt::QueuedConnection);
     QMetaObject::invokeMethod(synchronousRequestLoop, "quit", Qt::QueuedConnection);
     httpReply = nullptr;
@@ -564,7 +587,7 @@ void QHttpThreadDelegate::finishedWithErrorSlot(QNetworkReply::NetworkError erro
 #endif
     emit error(errorCode,detail);
     emit downloadFinished();
-
+    notifiedFinished = true;
 
     QMetaObject::invokeMethod(httpReply, "deleteLater", Qt::QueuedConnection);
     QMetaObject::invokeMethod(this, "deleteLater", Qt::QueuedConnection);
@@ -585,6 +608,7 @@ void QHttpThreadDelegate::synchronousFinishedWithErrorSlot(QNetworkReply::Networ
 
     synchronousDownloadData = httpReply->readAll();
 
+    notifiedFinished = true;
     QMetaObject::invokeMethod(httpReply, "deleteLater", Qt::QueuedConnection);
     QMetaObject::invokeMethod(synchronousRequestLoop, "quit", Qt::QueuedConnection);
     httpReply = nullptr;

@@ -2,7 +2,10 @@ Author: Lu YaNing <luyaning@uniontech.com>
 Date:   Thur, 11 Sep 2024 13:50:02 +0800
 Subject: Add QT_FORCE_OPENGL_TYPE
 
+Refreshed for Debian forky Qt 6.11.2.
 
+diff --git a/src/gui/kernel/qguiapplication.cpp b/src/gui/kernel/qguiapplication.cpp
+index 718772f0..b27c7021 100644
 --- a/src/gui/kernel/qguiapplication.cpp
 +++ b/src/gui/kernel/qguiapplication.cpp
 @@ -48,6 +48,7 @@
@@ -13,21 +16,20 @@ Subject: Add QT_FORCE_OPENGL_TYPE
  #include <qpa/qplatforminputcontext.h>
  #include <qpa/qplatforminputcontext_p.h>
  
-@@ -1483,6 +1484,17 @@ void QGuiApplicationPrivate::createPlatf
+@@ -1519,6 +1520,16 @@ void QGuiApplicationPrivate::createPlatformIntegration()
      // Load the platform integration
-     QString platformPluginPath = QString::fromLocal8Bit(qgetenv("QT_QPA_PLATFORM_PLUGIN_PATH"));
+     QString platformPluginPath = qEnvironmentVariable("QT_QPA_PLATFORM_PLUGIN_PATH");
  
-+    QString renderType = QString::fromLocal8Bit(qgetenv("QT_FORCE_OPENGL_TYPE"));
++    const QString renderType = qEnvironmentVariable("QT_FORCE_OPENGL_TYPE");
 +    if (!renderType.isEmpty()) {
 +        QSurfaceFormat format = QSurfaceFormat::defaultFormat();
-+
 +        if (renderType == "OpenGL"_L1)
 +            format.setRenderableType(QSurfaceFormat::OpenGL);
 +        else if (renderType == "OpenGLES"_L1)
 +            format.setRenderableType(QSurfaceFormat::OpenGLES);
-+
 +        QSurfaceFormat::setDefaultFormat(format);
 +    }
++
  
      QByteArray platformName;
  #ifdef QT_QPA_DEFAULT_PLATFORM_NAME

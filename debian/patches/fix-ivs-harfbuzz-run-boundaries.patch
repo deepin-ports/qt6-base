@@ -7,18 +7,13 @@ character to different font engines, keep the selector in the same
 harfbuzz shaping run as the base character so the variation glyph can
 be resolved.
 
----
+Refreshed for Debian forky Qt 6.11.2.
 
-Index: qt6-base/src/gui/text/qtextengine.cpp
-===================================================================
---- qt6-base.orig/src/gui/text/qtextengine.cpp
-+++ qt6-base/src/gui/text/qtextengine.cpp
-@@ -1449,17 +1449,25 @@
-                     : QFontEngine::ShaperFlag(0);
-         if (fontEngine->stringToCMap(reinterpret_cast<const QChar *>(string), itemLength, &initialGlyphs, &nGlyphs, shaperFlags) < 0)
-             Q_UNREACHABLE();
-     }
- 
+diff --git a/src/gui/text/qtextengine.cpp b/src/gui/text/qtextengine.cpp
+index 9cb8e3c2..9ac590ba 100644
+--- a/src/gui/text/qtextengine.cpp
++++ b/src/gui/text/qtextengine.cpp
+@@ -1468,7 +1468,15 @@ void QTextEngine::shapeText(int item) const
      if (fontEngine->type() == QFontEngine::Multi) {
          uint lastEngine = ~0u;
          for (int i = 0, glyph_pos = 0; i < itemLength; ++i, ++glyph_pos) {
@@ -35,8 +30,3 @@ Index: qt6-base/src/gui/text/qtextengine.cpp
              if (lastEngine != engineIdx) {
                  itemBoundaries.push_back(i);
                  itemBoundaries.push_back(glyph_pos);
-                 itemBoundaries.push_back(engineIdx);
- 
-                 if (engineIdx != 0) {
-                     QFontEngine *actualFontEngine = static_cast<QFontEngineMulti *>(fontEngine)->engine(engineIdx);
-                     si.ascent = qMax(actualFontEngine->ascent(), si.ascent);

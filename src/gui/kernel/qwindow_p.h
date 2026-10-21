@@ -41,7 +41,7 @@ public:
         WindowFrameExclusive
     };
 
-    QWindowPrivate();
+    QWindowPrivate(decltype(QObjectPrivateVersion) version = QObjectPrivateVersion);
     ~QWindowPrivate() override;
 
     void init(QWindow *parent, QScreen *targetScreen = nullptr);
@@ -92,10 +92,10 @@ public:
                          qxp::function_ref<void()> funcWidthChanged,
                          qxp::function_ref<void()> funcHeightChanged);
 
-    virtual void processSafeAreaMarginsChanged() {}
-
     virtual bool participatesInLastWindowClosed() const;
     virtual bool treatAsVisible() const;
+
+    virtual void maybeSynthesizeContextMenuEvent(QMouseEvent *event);
 
     const QWindow *forwardToPopup(QEvent *event, const QWindow *activePopupOnPress);
 

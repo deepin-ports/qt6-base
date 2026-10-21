@@ -1,5 +1,6 @@
 // Copyright (C) 2020 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #include "qplatformdefs.h"
 #include "qfileinfo.h"
@@ -337,6 +338,10 @@ QDateTime &QFileInfoPrivate::getFileTime(QFile::FileTime request) const
 
     Move-assigns \a other to this QFileInfo instance.
 
+    \note The moved-from object \a other is placed in a partially-formed state,
+    in which the only valid operations are destruction and assignment of a new
+    value.
+
     \since 5.2
 */
 
@@ -463,7 +468,11 @@ bool comparesEqual(const QFileInfo &lhs, const QFileInfo &rhs)
         if (lhs.d_ptr->fileEngine != rhs.d_ptr->fileEngine) // one is native, the other is a custom file-engine
             return false;
 
-        sensitive = QFileSystemEngine::isCaseSensitive() ? Qt::CaseSensitive : Qt::CaseInsensitive;
+        const bool lhsCaseSensitive = QFileSystemEngine::isCaseSensitive(lhs.d_ptr->fileEntry, lhs.d_ptr->metaData);
+        if (lhsCaseSensitive != QFileSystemEngine::isCaseSensitive(rhs.d_ptr->fileEntry, rhs.d_ptr->metaData))
+            return false;
+
+        sensitive = lhsCaseSensitive ? Qt::CaseSensitive : Qt::CaseInsensitive;
     } else {
         if (lhs.d_ptr->fileEngine->caseSensitive() != rhs.d_ptr->fileEngine->caseSensitive())
             return false;
@@ -486,9 +495,7 @@ QFileInfo &QFileInfo::operator=(const QFileInfo &fileinfo)
 /*!
     \fn void QFileInfo::swap(QFileInfo &other)
     \since 5.0
-
-    Swaps this file info with \a other. This function is very fast and
-    never fails.
+    \memberswap{file info}
 */
 
 /*!
@@ -1174,6 +1181,57 @@ bool QFileInfo::isSymbolicLink() const
                 QFileSystemMetaData::LegacyLinkType,
                 [d]() { return d->metaData.isLink(); },
                 [d]() { return d->getFileFlags(QAbstractFileEngine::LinkType); });
+}
+
+/*!
+    \since 6.10
+
+    Returns \c true if this QFileInfo refers to a file system entry that is
+    \e not a directory, regular file or symbolic link. Otherwise returns
+    \c false.
+
+    If this QFileInfo refers to a nonexistent entry, this method returns
+    \c false.
+
+    If the entry is a dangling symbolic link (the target doesn't exist), this
+    method returns \c false. For a non-dangling symbolic link, this function
+    returns information about the target, not the symbolic link.
+
+    On Unix a special (other) file system entry is a FIFO, socket, character
+    device, or block device. For more details, see the
+    \l{https://pubs.opengroup.org/onlinepubs/9699919799/functions/mknod.html}{\c mknod}
+    manual page.
+
+    On Windows (for historical reasons, see \l{Symbolic Links and Shortcuts})
+    this method returns \c true for \c .lnk files.
+
+    \sa isDir(), isFile(), isSymLink(), QDirListing::IteratorFlag::ExcludeOther
+*/
+bool QFileInfo::isOther() const
+{
+    Q_D(const QFileInfo);
+    using M = QFileSystemMetaData::MetaDataFlag;
+    // No M::LinkType to make QFileSystemEngine always call stat().
+    // M::WinLnkType is only relevant on Windows for '.lnk' files
+    constexpr auto mdFlags = M::ExistsAttribute | M::DirectoryType | M::FileType | M::WinLnkType;
+
+    auto fsLambda = [d]() {
+        // Check isLnkFile() first because currently exists() returns false for
+        // a broken '.lnk' where the target doesn't exist.
+        if (d->metaData.isLnkFile()) // Always false on non-Windows OSes
+            return true;
+        return d->metaData.exists() && !d->metaData.isDirectory() && !d->metaData.isFile();
+    };
+
+    auto engineLambda = [d]() {
+        using F = QAbstractFileEngine::FileFlag;
+        return d->getFileFlags(F::ExistsFlag)
+            && !d->getFileFlags(F::LinkType) // QAFE doesn't have a separate type for ".lnk" file
+            && !d->getFileFlags(F::DirectoryType)
+            && !d->getFileFlags(F::FileType);
+    };
+
+    return d->checkAttribute<bool>(mdFlags, std::move(fsLambda), std::move(engineLambda));
 }
 
 /*!

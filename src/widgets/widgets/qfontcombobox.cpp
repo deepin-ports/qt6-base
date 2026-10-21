@@ -1,5 +1,6 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #include "qfontcombobox.h"
 
@@ -424,8 +425,8 @@ QFontComboBox::QFontComboBox(QWidget *parent)
 */
 QFontComboBox::~QFontComboBox()
 {
-    Q_D(const QFontComboBox);
-    for (const QMetaObject::Connection &connection : d->connections)
+    Q_D(QFontComboBox);
+    for (QMetaObject::Connection &connection : d->connections)
         QObject::disconnect(connection);
 }
 

@@ -11,3 +11,14 @@ the following steps if you want to rebuild the Qt stack:
   - qt6-tools
 * Build the arch-independent packages (-doc and -doc-html) of the above sources.
 * Build the rest of the Qt stack in the usual way.
+
+Deepin / OBS bootstrap
+----------------------
+The default build produces all architecture-dependent packages. Documentation
+packages and their matching Qt >= 6.11 build dependencies are opt-in via the
+pkg.qt6.docs build profile, until qt6-declarative and qt6-tools are upgraded:
+
+  DEB_BUILD_PROFILES=pkg.qt6.docs dpkg-buildpackage -us -uc
+
+The Debian nodoc restriction remains supported. See forky-upgrade.md in the
+repository for patch provenance and migration details.

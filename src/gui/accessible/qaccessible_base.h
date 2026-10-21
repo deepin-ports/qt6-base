@@ -103,6 +103,7 @@ public:
         AcceleratorChanged   = 0x80C0,
         Announcement         = 0x80D0,
         IdentifierChanged    = 0x80E0,
+        RoleChanged          = 0x80E1,
 
         // was declared after AcceleratorChanged, without explicit value
         InvalidEvent                    = AcceleratorChanged + 1,
@@ -155,8 +156,6 @@ public:
 
         quint64 searchEdit : 1;
 
-        // quint64 horizontal : 1;
-        // quint64 vertical : 1;
         // quint64 invalidEntry : 1;
         // quint64 managesDescendants : 1;
         // quint64 singleLine : 1; // we have multi line, this is redundant.
@@ -176,11 +175,15 @@ public:
         // quint64 alertMedium : 1;
         // quint64 alertHigh : 1;
 
+        Q_DECL_UNUSED_MEMBER quint64 qt_reserved : 27;
+
         State() {
             std::memset(this, 0, sizeof(State));
         }
         friend inline bool operator==(const QAccessible::State &first, const QAccessible::State &second)
         {
+            static_assert(std::has_unique_object_representations_v<State>,
+                          "memcmp() cannot be used on types with padding");
             return std::memcmp(&first, &second, sizeof(QAccessible::State)) == 0;
         }
     };
@@ -266,6 +269,7 @@ public:
         WebDocument    = 0x00000084,
         Section        = 0x00000085,
         Notification   = 0x00000086,
+        Switch         = 0x00000087,
 
         // IAccessible2 roles
         // IA2_ROLE_CANVAS = 0x401, // An object that can be drawn into and to manage events from the objects drawn into it
@@ -314,6 +318,14 @@ public:
         // IA2_ROLE_TOGGLE_BUTTON = 0x42A,
         // IA2_ROLE_VIEW_PORT = 0x42B,
         ComplementaryContent = 0x42C,
+        // IA2_ROLE_LANDMARK = 0x42D,
+        // IA2_ROLE_LEVEL_BAR = 0x42E,
+        // IA2_ROLE_CONTENT_DELETION = 0x42F,
+        // IA2_ROLE_CONTENT_INSERTION = 0x430,
+        BlockQuote = 0x431,
+        // IA2_ROLE_MARK = 0x432,
+        // IA2_ROLE_SUGGESTION = 0x433,
+        // IA2_ROLE_COMMENT = = 0x434,
 
         UserRole       = 0x0000ffff
     };
@@ -369,6 +381,8 @@ public:
     enum class Attribute {
         Custom,
         Level,
+        Locale,
+        Orientation,
     };
     Q_ENUM(Attribute)
 
@@ -412,7 +426,7 @@ public:
 
     static void cleanup();
 
-    static QPair< int, int > qAccessibleTextBoundaryHelper(const QTextCursor &cursor, TextBoundaryType boundaryType);
+    static std::pair< int, int > qAccessibleTextBoundaryHelper(const QTextCursor &cursor, TextBoundaryType boundaryType);
 
 private:
     static UpdateHandler updateHandler;

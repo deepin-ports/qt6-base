@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
 
 #include "qlibinputtouch_p.h"
+#include "qlibinputhandler_p.h"
 #include "qoutputmapping_p.h"
 #include <libinput.h>
 #include <QtGui/QGuiApplication>
@@ -13,8 +14,7 @@
 
 QT_BEGIN_NAMESPACE
 
-Q_DECLARE_LOGGING_CATEGORY(qLcLibInput)
-Q_LOGGING_CATEGORY(qLcLibInputEvents, "qt.qpa.input.events")
+Q_STATIC_LOGGING_CATEGORY(qLcLibInputEvents, "qt.qpa.input.events")
 
 QWindowSystemInterface::TouchPoint *QLibInputTouch::DeviceState::point(int32_t slot)
 {
@@ -70,7 +70,8 @@ static void setMatrix(libinput_device *dev)
             float matrix[6];
             QList<QByteArray> list = env.split(' ');
             if (list.length() != 6) {
-                qCWarning(qLcLibInput, "matrix length %lld wrong, should be 6", list.length());
+                qCWarning(qLcLibInput, "matrix length %" PRIdQSIZETYPE " wrong, should be 6",
+                          list.length());
                 return;
             }
             for (int i = 0; i < 6; i++) {

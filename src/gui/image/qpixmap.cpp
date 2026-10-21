@@ -48,12 +48,13 @@ QT_WARNING_DISABLE_MSVC(4723)
 
 static bool qt_pixmap_thread_test()
 {
-    if (Q_UNLIKELY(!QCoreApplication::instance())) {
+    if (!QCoreApplication::instanceExists()) {
         qFatal("QPixmap: Must construct a QGuiApplication before a QPixmap");
         return false;
     }
     if (QGuiApplicationPrivate::instance()
-        && qApp->thread() != QThread::currentThread()
+        && !QThread::isMainThread()
+        && Q_LIKELY(QGuiApplicationPrivate::platformIntegration())
         && !QGuiApplicationPrivate::platformIntegration()->hasCapability(QPlatformIntegration::ThreadedPixmaps)) {
         qWarning("QPixmap: It is not safe to use pixmaps outside the GUI thread on this platform");
         return false;
@@ -368,9 +369,7 @@ QPixmap &QPixmap::operator=(const QPixmap &pixmap)
 
 /*!
     \fn void QPixmap::swap(QPixmap &other)
-
-    Swaps pixmap \a other with this pixmap. This operation is very
-    fast and never fails.
+    \memberswap{pixmap}
 */
 
 /*!
@@ -1001,7 +1000,7 @@ bool QPixmap::convertFromImage(const QImage &image, Qt::ImageConversionFlags fla
     transformation modes specified by \a aspectRatioMode and \a
     transformMode.
 
-    \image qimage-scaling.png
+    \image qimage-scaling.png {Three aspect ratio modes compared}
 
     \list
     \li If \a aspectRatioMode is Qt::IgnoreAspectRatio, the pixmap
@@ -1207,16 +1206,23 @@ QPixmap QPixmap::transformed(const QTransform &transform,
     \table
     \header \li Format \li Description                      \li Qt's support
     \row    \li BMP    \li Windows Bitmap                   \li Read/write
-    \row    \li GIF    \li Graphic Interchange Format (optional) \li Read
-    \row    \li JPG    \li Joint Photographic Experts Group \li Read/write
+    \row    \li CUR    \li Windows Cursor                   \li Read/write
+    \row    \li GIF    \li Graphic Interchange Format       \li Read
+    \row    \li ICO    \li Windows Icon                     \li Read/write
+    \row    \li JFIF   \li JPEG File Interchange Format     \li Read/write
     \row    \li JPEG   \li Joint Photographic Experts Group \li Read/write
+    \row    \li JPG    \li Joint Photographic Experts Group \li Read/write
+    \row    \li PBM    \li Portable Bitmap                  \li Read/write
+    \row    \li PGM    \li Portable Graymap                 \li Read/write
     \row    \li PNG    \li Portable Network Graphics        \li Read/write
-    \row    \li PBM    \li Portable Bitmap                  \li Read
-    \row    \li PGM    \li Portable Graymap                 \li Read
     \row    \li PPM    \li Portable Pixmap                  \li Read/write
+    \row    \li SVG    \li Scalable Vector Graphics         \li Read
+    \row    \li SVGZ   \li Scalable Vector Graphics (Compressed) \li Read
     \row    \li XBM    \li X11 Bitmap                       \li Read/write
     \row    \li XPM    \li X11 Pixmap                       \li Read/write
     \endtable
+
+    Further formats are supported if the \l{Qt Image Formats} module is installed.
 
     \section1 Pixmap Information
 
@@ -1365,7 +1371,7 @@ QBitmap QPixmap::mask() const
 
     \note QGuiApplication must be created before calling this function.
 
-    \sa depth(), QColormap::depth(), {QPixmap#Pixmap Information}{Pixmap Information}
+    \sa depth(), {QPixmap#Pixmap Information}{Pixmap Information}
 
 */
 int QPixmap::defaultDepth()

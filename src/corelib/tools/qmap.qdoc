@@ -6,6 +6,7 @@
     \class QMap
     \inmodule QtCore
     \brief The QMap class is a template class that provides an associative array.
+    \compares equality
 
     \ingroup tools
     \ingroup shared
@@ -171,9 +172,7 @@
 
 /*! \fn template <class Key, class T> void QMap<Key, T>::swap(QMap<Key, T> &other) noexcept
     \since 4.8
-
-    Swaps map \a other with this map. This operation is very
-    fast and never fails.
+    \memberswap{map}
 */
 
 /*! \fn template <class Key, class T> QMap<Key, T>::QMap(std::initializer_list<std::pair<Key,T> > list)
@@ -448,7 +447,7 @@
     Returns a reference to the largest key in the map.
     This function assumes that the map is not empty.
 
-    This executes in \l{logarithmic time}.
+    This executes in \l{constant time}.
 
     \sa firstKey(), last(), keyEnd(), isEmpty()
 */
@@ -476,7 +475,7 @@
     Returns a reference to the last value in the map, that is the value mapped
     to the largest key. This function assumes that the map is not empty.
 
-    When unshared (or const version is called), this executes in \l{logarithmic time}.
+    When unshared (or const version is called), this executes in \l{constant time}.
 
     \sa first(), lastKey(), isEmpty()
 */
@@ -729,6 +728,9 @@
 
     If there is already an item with the key \a key, that item's value
     is replaced with \a value.
+
+    Inserting a key/value pair with an existing key replaces the existing
+    value.
 
     Returns an iterator pointing to the new/updated element.
 */
@@ -1393,8 +1395,5 @@
 /*!
     \fn template <class Key, class T> size_t QMap<Key, T>::qHash(const QMap &key, size_t seed) noexcept
     \since 6.8
-
-    Returns the hash value for \a key, using \a seed to seed the calculation.
-
-    Types \c Key and \c T must be supported by qHash().
+    \qhashTS{QMap}{Key}{T}
 */

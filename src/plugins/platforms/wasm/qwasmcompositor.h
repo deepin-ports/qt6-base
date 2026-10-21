@@ -1,5 +1,6 @@
 // Copyright (C) 2018 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #ifndef QWASMCOMPOSITOR_H
 #define QWASMCOMPOSITOR_H
@@ -7,8 +8,12 @@
 #include "qwasmwindowstack.h"
 
 #include <qpa/qplatformwindow.h>
+#include <private/qwasmsuspendresumecontrol_p.h>
 
 #include <QMap>
+#include <tuple>
+
+#include <emscripten/val.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -35,9 +40,9 @@ public:
 
     void requestUpdate();
     enum UpdateRequestDeliveryType { ExposeEventDelivery, UpdateRequestDelivery };
-    void requestUpdateWindow(QWasmWindow *window, UpdateRequestDeliveryType updateType = ExposeEventDelivery);
+    void requestUpdateWindow(QWasmWindow *window, const QRect &updateRect, UpdateRequestDeliveryType updateType = ExposeEventDelivery);
 
-    void handleBackingStoreFlush(QWindow *window);
+    void handleBackingStoreFlush(QWindow *window, const QRect &updateRect);
     void onWindowTreeChanged(QWasmWindowTreeNodeChangeType changeType, QWasmWindow *window);
 
 private:
@@ -46,11 +51,11 @@ private:
     void deregisterEventHandlers();
 
     void deliverUpdateRequests();
-    void deliverUpdateRequest(QWasmWindow *window, UpdateRequestDeliveryType updateType);
+    void deliverUpdateRequest(QWasmWindow *window, const QRect &updateRect, UpdateRequestDeliveryType updateType);
 
     bool m_isEnabled = true;
-    QMap<QWasmWindow *, UpdateRequestDeliveryType> m_requestUpdateWindows;
-    int m_requestAnimationFrameId = -1;
+    QMap<QWasmWindow *, std::tuple<QRect, UpdateRequestDeliveryType>> m_requestUpdateWindows;
+    uint32_t m_drawCallbackHandle = 0;
     bool m_inDeliverUpdateRequest = false;
     static bool m_requestUpdateHoldEnabled;
 };

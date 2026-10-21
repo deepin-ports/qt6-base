@@ -1,8 +1,12 @@
-Index: qt6-base/src/widgets/itemviews/qlistview.cpp
-===================================================================
---- qt6-base.orig/src/widgets/itemviews/qlistview.cpp
-+++ qt6-base/src/widgets/itemviews/qlistview.cpp
-@@ -792,13 +792,6 @@ void QListView::mouseMoveEvent(QMouseEve
+
+
+Refreshed for Debian forky Qt 6.11.2.
+
+diff --git a/src/widgets/itemviews/qlistview.cpp b/src/widgets/itemviews/qlistview.cpp
+index 4b50ec8e..da5f7737 100644
+--- a/src/widgets/itemviews/qlistview.cpp
++++ b/src/widgets/itemviews/qlistview.cpp
+@@ -797,13 +797,6 @@ void QListView::mouseMoveEvent(QMouseEvent *e)
              this->setHorizontalScrollMode(ScrollPerPixel);
              QScroller::grabGesture(this, QScroller::LeftMouseButtonGesture);
  

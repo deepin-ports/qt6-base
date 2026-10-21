@@ -1,5 +1,6 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 /*!
     \class QCompleter
@@ -121,6 +122,8 @@
 #include "QtGui/qevent.h"
 #include <private/qapplication_p.h>
 #include <private/qwidget_p.h>
+#include <qpa/qplatformwindow.h>
+#include <qpa/qplatformwindow_p.h>
 #if QT_CONFIG(lineedit)
 #include "QtWidgets/qlineedit.h"
 #endif
@@ -886,7 +889,6 @@ void QCompleterPrivate::_q_autoResizePopup()
 void QCompleterPrivate::showPopup(const QRect& rect)
 {
     const QRect screen = widget->screen()->availableGeometry();
-    Qt::LayoutDirection dir = widget->layoutDirection();
     QPoint pos;
     int rh, w;
     int h = (popup->sizeHintForRow(0) * qMin(maxVisibleItems, popup->model()->rowCount()) + 3) + 3;
@@ -897,7 +899,7 @@ void QCompleterPrivate::showPopup(const QRect& rect)
     if (rect.isValid()) {
         rh = rect.height();
         w = rect.width();
-        pos = widget->mapToGlobal(dir == Qt::RightToLeft ? rect.bottomRight() : rect.bottomLeft());
+        pos = widget->mapToGlobal(rect.bottomLeft());
     } else {
         rh = widget->height();
         pos = widget->mapToGlobal(QPoint(0, widget->height() - 2));
@@ -923,8 +925,22 @@ void QCompleterPrivate::showPopup(const QRect& rect)
 
     popup->setGeometry(pos.x(), pos.y(), w, h);
 
-    if (!popup->isVisible())
+    if (!popup->isVisible()) {
+#if QT_CONFIG(wayland)
+        popup->createWinId();
+        if (auto waylandWindow = dynamic_cast<QNativeInterface::Private::QWaylandWindow*>(popup->windowHandle()->handle())) {
+            popup->windowHandle()->setTransientParent(widget->window()->windowHandle());
+            if (!rect.isValid()) { // Automatically positioned popup
+                const QRect controlGeometry = QRect(
+                        widget->mapTo(widget->topLevelWidget(), QPoint(0, 0)), widget->size());
+                waylandWindow->setParentControlGeometry(controlGeometry);
+                waylandWindow->setExtendedWindowType(
+                        QNativeInterface::Private::QWaylandWindow::ComboBox);
+            }
+        }
+#endif
         popup->show();
+    }
 }
 
 #if QT_CONFIG(filesystemmodel)
@@ -1370,11 +1386,13 @@ bool QCompleter::eventFilter(QObject *o, QEvent *e)
             return false;
         }
 
-        // Send the event to the widget. If the widget accepted the event, do nothing
-        // If the widget did not accept the event, provide a default implementation
-        d->eatFocusOut = false;
-        (static_cast<QObject *>(d->widget))->event(ke);
-        d->eatFocusOut = true;
+        if (d->widget) {
+            // Send the event to the widget. If the widget accepted the event, do nothing
+            // If the widget did not accept the event, provide a default implementation
+            d->eatFocusOut = false;
+            (static_cast<QObject *>(d->widget))->event(ke);
+            d->eatFocusOut = true;
+        }
         if (!d->widget || e->isAccepted() || !d->popup->isVisible()) {
             // widget lost focus, hide the popup
             if (d->widget && (!d->widget->hasFocus()
@@ -1426,8 +1444,9 @@ bool QCompleter::eventFilter(QObject *o, QEvent *e)
 
 #ifdef QT_KEYPAD_NAVIGATION
     case QEvent::KeyRelease: {
-        QKeyEvent *ke = static_cast<QKeyEvent *>(e);
-        if (QApplicationPrivate::keypadNavigationEnabled() && ke->key() == Qt::Key_Back) {
+        if (d->widget &&
+            QApplicationPrivate::keypadNavigationEnabled() && ke->key() == Qt::Key_Back) {
+            QKeyEvent *ke = static_cast<QKeyEvent *>(e);
             // Send the event to the 'widget'. This is what we did for KeyPress, so we need
             // to do the same for KeyRelease, in case the widget's KeyPress event set
             // up something (such as a timer) that is relying on also receiving the
@@ -1444,7 +1463,8 @@ bool QCompleter::eventFilter(QObject *o, QEvent *e)
 
     case QEvent::MouseButtonPress: {
 #ifdef QT_KEYPAD_NAVIGATION
-        if (QApplicationPrivate::keypadNavigationEnabled()) {
+        if (d->widget
+            && QApplicationPrivate::keypadNavigationEnabled()) {
             // if we've clicked in the widget (or its descendant), let it handle the click
             QWidget *source = qobject_cast<QWidget *>(o);
             if (source) {
@@ -1473,7 +1493,8 @@ bool QCompleter::eventFilter(QObject *o, QEvent *e)
         return true;
     case QEvent::InputMethod:
     case QEvent::ShortcutOverride:
-        QCoreApplication::sendEvent(d->widget, e);
+        if (d->widget)
+            QCoreApplication::sendEvent(d->widget, e);
         break;
 
     default:

@@ -1,5 +1,6 @@
 // Copyright (C) 2018 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #include "qwasmfontdatabase.h"
 #include "qwasmintegration.h"
@@ -319,7 +320,7 @@ QFontEngine *QWasmFontDatabase::fontEngine(const QFontDef &fontDef, void *handle
 
 QStringList QWasmFontDatabase::fallbacksForFamily(const QString &family, QFont::Style style,
                                                     QFont::StyleHint styleHint,
-                                                    QChar::Script script) const
+                                                    QFontDatabasePrivate::ExtendedScript script) const
 {
     QStringList fallbacks
         = QFreeTypeFontDatabase::fallbacksForFamily(family, style, styleHint, script);

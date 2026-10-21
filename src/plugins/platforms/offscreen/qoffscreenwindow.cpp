@@ -71,6 +71,10 @@ void QOffscreenWindow::setGeometryImpl(const QRect &rect)
 
     QPlatformWindow::setGeometry(adjusted);
 
+    QPlatformScreen *newScreen = screenForGeometry(rect);
+    if (newScreen != screen())
+        QWindowSystemInterface::handleWindowScreenChanged(window(), newScreen->screen());
+
     if (m_visible) {
         QWindowSystemInterface::handleGeometryChange(window(), adjusted);
         QWindowSystemInterface::handleExposeEvent(window(), QRect(QPoint(), adjusted.size()));
@@ -128,6 +132,11 @@ void QOffscreenWindow::requestActivateWindow()
 WId QOffscreenWindow::winId() const
 {
     return m_winId;
+}
+
+QSurfaceFormat QOffscreenWindow::format() const
+{
+    return window()->requestedFormat();
 }
 
 QMargins QOffscreenWindow::frameMargins() const

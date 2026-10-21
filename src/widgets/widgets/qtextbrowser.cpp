@@ -1,5 +1,6 @@
 // Copyright (C) 2019 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #include "qtextbrowser.h"
 #include "qtextedit_p.h"
@@ -33,7 +34,7 @@ static inline bool shouldEnableInputMethod(QTextBrowser *texbrowser)
 #endif
 }
 
-Q_LOGGING_CATEGORY(lcBrowser, "qt.text.browser")
+Q_STATIC_LOGGING_CATEGORY(lcBrowser, "qt.text.browser")
 
 class QTextBrowserPrivate : public QTextEditPrivate
 {
@@ -48,7 +49,7 @@ public:
     {}
     ~QTextBrowserPrivate()
     {
-        for (const QMetaObject::Connection &connection : connections)
+        for (QMetaObject::Connection &connection : connections)
             QObject::disconnect(connection);
     }
 

@@ -1,5 +1,6 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #ifndef QHOSTINFO_P_H
 #define QHOSTINFO_P_H
@@ -35,6 +36,7 @@
 #include <QCache>
 
 #include <atomic>
+#include <memory>
 
 QT_BEGIN_NAMESPACE
 
@@ -145,7 +147,7 @@ public:
 
     QString toBeLookedUp;
     int id;
-    QHostInfoResult resultEmitter;
+    std::unique_ptr<QHostInfoResult> resultEmitter;
 };
 
 

@@ -6,6 +6,7 @@
     \class QMultiMap
     \inmodule QtCore
     \brief The QMultiMap class is a template class that provides an associative array with multiple equivalent keys.
+    \compares equality
 
     \ingroup tools
     \ingroup shared
@@ -37,7 +38,7 @@
 
     \snippet code/src_corelib_tools_qmultimap.cpp 2
 
-    This inserts the following three (key, value) pairs into the
+    This inserts the following four (key, value) pairs into the
     QMultiMap: ("a", 1), ("b", 3), ("c", 7), and ("c", -5); note
     that duplicate keys are allowed.
 
@@ -90,6 +91,7 @@
     key and iterate from there:
 
     \snippet code/src_corelib_tools_qmultimap.cpp 11
+    \snippet code/src_corelib_tools_qmultimap.cpp 11_better
 
     If you only need to extract the values from a map (not the keys),
     you can also use range-based for:
@@ -217,9 +219,7 @@
 
 /*! \fn template <class Key, class T> void QMultiMap<Key, T>::swap(QMultiMap<Key, T> &other)
     \since 4.8
-
-    Swaps multi map \a other with this multi map. This operation is very
-    fast and never fails.
+    \memberswap{multi map}
 */
 
 /*! \fn template<class Key, class T> bool QMultiMap<Key, T>::operator==(const QMultiMap<Key, T> &lhs, const QMultiMap<Key, T> &rhs)
@@ -457,7 +457,7 @@
 
     Returns the number of items associated with key \a key.
 
-    \sa contains(), QMultiMap::count()
+    \sa contains(), QMultiMap::count(const Key &key, const T &value)
 */
 
 /*! \fn template <class Key, class T> qsizetype QMultiMap<Key, T>::count(const Key &key, const T &value) const
@@ -485,7 +485,7 @@
     Returns a reference to the largest key in the multi map.
     This function assumes that the multi map is not empty.
 
-    This executes in \l{logarithmic time}.
+    This executes in \l{constant time}.
 
     \sa firstKey(), last(), keyEnd(), isEmpty()
 */
@@ -513,7 +513,7 @@
     Returns a reference to the last value in the multi map, that is the value mapped
     to the largest key. This function assumes that the map is not empty.
 
-    When unshared (or const version is called), this executes in \l{logarithmic time}.
+    When unshared (or const version is called), this executes in \l{constant time}.
 
     \sa first(), lastKey(), isEmpty()
 */
@@ -715,6 +715,7 @@
     the items with the same key:
 
     \snippet code/src_corelib_tools_qmultimap.cpp 11
+    \snippet code/src_corelib_tools_qmultimap.cpp 11_better
 
     \sa constFind(), value(), values(), lowerBound(), upperBound()
 */
@@ -733,7 +734,7 @@
     If the multi map contains no item with key \a key, the function
     returns constEnd().
 
-    \sa find(), QMultiMap::constFind()
+    \sa find(), QMultiMap::constFind(const Key &key, const T &value)
 */
 
 /*!
@@ -816,6 +817,10 @@
     function will simply create a new one. (This behavior is
     different from replace(), which overwrites the value of an
     existing item.)
+
+    QMultiMap allows duplicate keys and stores items in ascending
+    key order. For duplicate keys, the values are stored in reverse
+    insertion order (the most recently inserted value comes first).
 
     Returns an iterator pointing to the new element.
 

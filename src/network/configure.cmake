@@ -7,12 +7,21 @@
 
 #### Libraries
 
-qt_find_package(WrapBrotli PROVIDED_TARGETS WrapBrotli::WrapBrotliDec MODULE_NAME network QMAKE_LIB brotli)
-qt_find_package(Libproxy PROVIDED_TARGETS PkgConfig::Libproxy MODULE_NAME network QMAKE_LIB libproxy)
-qt_find_package(GSSAPI PROVIDED_TARGETS GSSAPI::GSSAPI MODULE_NAME network QMAKE_LIB gssapi)
-qt_find_package(GLIB2 OPTIONAL_COMPONENTS GOBJECT PROVIDED_TARGETS GLIB2::GOBJECT MODULE_NAME core QMAKE_LIB gobject)
-qt_find_package(GLIB2 OPTIONAL_COMPONENTS GIO PROVIDED_TARGETS GLIB2::GIO MODULE_NAME core QMAKE_LIB gio)
-qt_find_package(WrapResolv PROVIDED_TARGETS WrapResolv::WrapResolv MODULE_NAME network QMAKE_LIB libresolv)
+qt_feature_vcpkg_scope(network)
+qt_find_package(WrapBrotli MODULE
+    PROVIDED_TARGETS WrapBrotli::WrapBrotliDec MODULE_NAME network QMAKE_LIB brotli
+    VCPKG_PORT brotli
+    VCPKG_ADD_TO_FEATURE brotli
+)
+qt_find_package(Libproxy MODULE
+    PROVIDED_TARGETS PkgConfig::Libproxy MODULE_NAME network QMAKE_LIB libproxy)
+qt_find_package(GSSAPI MODULE PROVIDED_TARGETS GSSAPI::GSSAPI MODULE_NAME network QMAKE_LIB gssapi)
+qt_find_package(GLIB2 MODULE
+    OPTIONAL_COMPONENTS GOBJECT PROVIDED_TARGETS GLIB2::GOBJECT MODULE_NAME core QMAKE_LIB gobject)
+qt_find_package(GLIB2 MODULE
+    OPTIONAL_COMPONENTS GIO PROVIDED_TARGETS GLIB2::GIO MODULE_NAME core QMAKE_LIB gio)
+qt_find_package(WrapResolv MODULE
+    PROVIDED_TARGETS WrapResolv::WrapResolv MODULE_NAME network QMAKE_LIB libresolv)
 
 #### Tests
 
@@ -38,8 +47,14 @@ freeifaddrs(list);
 )
 
 # ipv6ifname
+# On QNX, if_nametoindex() and friends live in libsocket, not libc; link it
+# so the test actually validates the symbols there.
+if(QNX)
+    set(ipv6ifname_test_libs LIBRARIES socket)
+endif()
 qt_config_compile_test(ipv6ifname
     LABEL "IPv6 ifname"
+    ${ipv6ifname_test_libs}
     CODE
 "#include <sys/types.h>
 #include <sys/socket.h>
@@ -57,6 +72,7 @@ if_freenameindex(if_nameindex());
 }
 "# FIXME: use: unmapped library: network
 )
+unset(ipv6ifname_test_libs)
 
 # linux-netlink
 qt_config_compile_test(linux_netlink
@@ -240,7 +256,7 @@ qt_feature("dtls" PUBLIC
     SECTION "Networking"
     LABEL "DTLS"
     PURPOSE "Provides a DTLS implementation"
-    CONDITION QT_FEATURE_openssl AND QT_FEATURE_udpsocket AND TEST_dtls
+    CONDITION QT_FEATURE_ssl AND QT_FEATURE_openssl AND QT_FEATURE_udpsocket AND TEST_dtls
 )
 qt_feature("ocsp" PUBLIC
     SECTION "Networking"
@@ -308,7 +324,7 @@ qt_feature("localserver" PUBLIC
     SECTION "Networking"
     LABEL "QLocalServer"
     PURPOSE "Provides a local socket based server."
-    CONDITION QT_FEATURE_temporaryfile
+    CONDITION QT_FEATURE_temporaryfile AND NOT VXWORKS
 )
 qt_feature_definition("localserver" "QT_NO_LOCALSERVER" NEGATE VALUE "1")
 qt_feature("dnslookup" PUBLIC
@@ -353,7 +369,7 @@ qt_feature("publicsuffix-qt" PRIVATE
 qt_feature("publicsuffix-system" PRIVATE
     LABEL "  System publicsuffix database"
     CONDITION QT_FEATURE_topleveldomain
-    AUTODETECT LINUX
+    AUTODETECT LINUX OR HURD
     ENABLE INPUT_publicsuffix STREQUAL "system" OR INPUT_publicsuffix STREQUAL "all"
     DISABLE INPUT_publicsuffix STREQUAL "qt"
 )

@@ -3,13 +3,13 @@ Date:   Thu Oct 04 21:20:24 2025
 Subject:Fix Improve Happy Eyeballs for HTTPS and HTTP/2 to avoid stalls
 Upstream: https://codereview.qt-project.org/c/qt/qtbase/+/680136,https://codereview.qt-project.org/c/qt/qtbase/+/679505
 
----
+Refreshed for Debian forky Qt 6.11.2.
 
-Index: qt6-base/src/network/access/qhttpnetworkconnection.cpp
-===================================================================
---- qt6-base.orig/src/network/access/qhttpnetworkconnection.cpp
-+++ qt6-base/src/network/access/qhttpnetworkconnection.cpp
-@@ -173,14 +173,49 @@ bool QHttpNetworkConnectionPrivate::shou
+diff --git a/src/network/access/qhttpnetworkconnection.cpp b/src/network/access/qhttpnetworkconnection.cpp
+index 1b8bfd5d..a328458e 100644
+--- a/src/network/access/qhttpnetworkconnection.cpp
++++ b/src/network/access/qhttpnetworkconnection.cpp
+@@ -177,14 +177,49 @@ bool QHttpNetworkConnectionPrivate::shouldEmitChannelError(QIODevice *socket)
      // If the IPv4 connection still isn't started we need to start it now.
      if (delayedConnectionTimer.isActive()) {
          delayedConnectionTimer.stop();
@@ -64,7 +64,7 @@ Index: qt6-base/src/network/access/qhttpnetworkconnection.cpp
      } else {
          if (networkLayerState == HostLookupPending || networkLayerState == IPv4or6) {
              if (channels[otherSocket].isSocketBusy() && (channels[otherSocket].state != QHttpNetworkConnectionChannel::ClosingState)) {
-@@ -195,8 +230,9 @@ bool QHttpNetworkConnectionPrivate::shou
+@@ -199,8 +234,9 @@ bool QHttpNetworkConnectionPrivate::shouldEmitChannelError(QIODevice *socket)
                  emitError = true;
              }
          } else {
@@ -76,7 +76,7 @@ Index: qt6-base/src/network/access/qhttpnetworkconnection.cpp
                  // First connection worked so this is the second one to complete and it failed.
                  channels[i].close();
                  QMetaObject::invokeMethod(q, "_q_startNextRequest", Qt::QueuedConnection);
-@@ -646,7 +682,8 @@ QHttpNetworkReply* QHttpNetworkConnectio
+@@ -662,7 +698,8 @@ QHttpNetworkReply* QHttpNetworkConnectionPrivate::queueRequest(const QHttpNetwor
      else { // HTTP/2 ('h2' mode)
          if (!pair.second->d_func()->requestIsPrepared)
              prepareRequest(pair);
@@ -86,7 +86,7 @@ Index: qt6-base/src/network/access/qhttpnetworkconnection.cpp
      }
  
      // For Happy Eyeballs the networkLayerState is set to Unknown
-@@ -671,10 +708,12 @@ QHttpNetworkReply* QHttpNetworkConnectio
+@@ -687,10 +724,12 @@ QHttpNetworkReply* QHttpNetworkConnectionPrivate::queueRequest(const QHttpNetwor
  
  void QHttpNetworkConnectionPrivate::fillHttp2Queue()
  {
@@ -100,7 +100,7 @@ Index: qt6-base/src/network/access/qhttpnetworkconnection.cpp
      }
  
      highPriorityQueue.clear();
-@@ -682,7 +721,7 @@ void QHttpNetworkConnectionPrivate::fill
+@@ -698,7 +737,7 @@ void QHttpNetworkConnectionPrivate::fillHttp2Queue()
      for (auto &pair : lowPriorityQueue) {
          if (!pair.second->d_func()->requestIsPrepared)
              prepareRequest(pair);
@@ -109,7 +109,7 @@ Index: qt6-base/src/network/access/qhttpnetworkconnection.cpp
      }
  
      lowPriorityQueue.clear();
-@@ -1079,28 +1118,30 @@ void QHttpNetworkConnectionPrivate::_q_s
+@@ -1102,28 +1141,30 @@ void QHttpNetworkConnectionPrivate::_q_startNextRequest()
      }
      case QHttpNetworkConnection::ConnectionTypeHTTP2Direct:
      case QHttpNetworkConnection::ConnectionTypeHTTP2: {
@@ -151,7 +151,7 @@ Index: qt6-base/src/network/access/qhttpnetworkconnection.cpp
              }
          }
          break;
-@@ -1315,12 +1356,18 @@ void QHttpNetworkConnectionPrivate::_q_h
+@@ -1338,12 +1379,18 @@ void QHttpNetworkConnectionPrivate::_q_hostLookupFinished(const QHostInfo &info)
  // connection will then be disconnected.
  void QHttpNetworkConnectionPrivate::startNetworkLayerStateLookup()
  {
@@ -170,7 +170,7 @@ Index: qt6-base/src/network/access/qhttpnetworkconnection.cpp
  
          channels[0].networkLayerPreference = QAbstractSocket::IPv4Protocol;
          channels[1].networkLayerPreference = QAbstractSocket::IPv6Protocol;
-@@ -1333,6 +1380,7 @@ void QHttpNetworkConnectionPrivate::star
+@@ -1356,6 +1403,7 @@ void QHttpNetworkConnectionPrivate::startNetworkLayerStateLookup()
              channels[0].ensureConnection();
      } else {
          networkLayerState = IPv4or6;
@@ -178,7 +178,7 @@ Index: qt6-base/src/network/access/qhttpnetworkconnection.cpp
          channels[0].networkLayerPreference = QAbstractSocket::AnyIPProtocol;
          channels[0].ensureConnection();
      }
-@@ -1340,7 +1388,28 @@ void QHttpNetworkConnectionPrivate::star
+@@ -1363,7 +1411,28 @@ void QHttpNetworkConnectionPrivate::startNetworkLayerStateLookup()
  
  void QHttpNetworkConnectionPrivate::networkLayerDetected(QAbstractSocket::NetworkLayerProtocol protocol)
  {
@@ -207,13 +207,23 @@ Index: qt6-base/src/network/access/qhttpnetworkconnection.cpp
          if ((channels[i].networkLayerPreference != protocol) && (channels[i].state == QHttpNetworkConnectionChannel::ConnectingState)) {
              channels[i].close();
          }
-Index: qt6-base/src/network/access/qhttpnetworkconnection_p.h
-===================================================================
---- qt6-base.orig/src/network/access/qhttpnetworkconnection_p.h
-+++ qt6-base/src/network/access/qhttpnetworkconnection_p.h
-@@ -261,6 +261,9 @@ public:
-     // early).
-     QNetworkConnectionMonitor connectionMonitor;
+diff --git a/src/network/access/qhttpnetworkconnection_p.h b/src/network/access/qhttpnetworkconnection_p.h
+index 3f60c5b3..25ee114d 100644
+--- a/src/network/access/qhttpnetworkconnection_p.h
++++ b/src/network/access/qhttpnetworkconnection_p.h
+@@ -124,6 +124,9 @@ private:
+     friend class QHttpThreadDelegate;
+     friend class QHttpNetworkReply;
+     friend class QHttpNetworkReplyPrivate;
++    // HTTP/2 Happy Eyeballs: pre-computed target channel index
++    int h2Index = 0;
++
+     friend class QHttpNetworkConnectionChannel;
+     friend class QHttp2ProtocolHandler;
+     friend class QHttpProtocolHandler;
+@@ -261,6 +264,9 @@ public:
+ 
+     QTcpKeepAliveConfiguration tcpKeepAliveConfiguration = {};
  
 +    // HTTP/2 Happy Eyeballs: pre-computed target channel index
 +    int h2Index = 0;
@@ -221,11 +231,11 @@ Index: qt6-base/src/network/access/qhttpnetworkconnection_p.h
      friend class QHttpNetworkConnectionChannel;
  };
  
-Index: qt6-base/src/network/access/qhttpnetworkconnectionchannel.cpp
-===================================================================
---- qt6-base.orig/src/network/access/qhttpnetworkconnectionchannel.cpp
-+++ qt6-base/src/network/access/qhttpnetworkconnectionchannel.cpp
-@@ -887,35 +887,55 @@ void QHttpNetworkConnectionChannel::_q_d
+diff --git a/src/network/access/qhttpnetworkconnectionchannel.cpp b/src/network/access/qhttpnetworkconnectionchannel.cpp
+index e427175c..1323cdf4 100644
+--- a/src/network/access/qhttpnetworkconnectionchannel.cpp
++++ b/src/network/access/qhttpnetworkconnectionchannel.cpp
+@@ -880,35 +880,55 @@ void QHttpNetworkConnectionChannel::_q_disconnected()
  
  void QHttpNetworkConnectionChannel::_q_connected_abstract_socket(QAbstractSocket *absSocket)
  {
@@ -297,7 +307,7 @@ Index: qt6-base/src/network/access/qhttpnetworkconnectionchannel.cpp
      }
  
      // improve performance since we get the request sent by the kernel ASAP
-@@ -1229,6 +1249,19 @@ void QHttpNetworkConnectionChannel::_q_e
+@@ -1233,6 +1253,19 @@ void QHttpNetworkConnectionChannel::_q_encrypted()
      QSslSocket *sslSocket = qobject_cast<QSslSocket *>(socket);
      Q_ASSERT(sslSocket);
  

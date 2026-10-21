@@ -2566,10 +2566,8 @@ void tst_QListView::taskQTBUG_58749_adjustToContent()
 
     // use the long text and make sure the width is adjusted.
     model.setData(model.index(0, 0), longText);
-    QApplication::processEvents();
-    const QRect itemRect = view->visualRect(model.index(0, 0));
-    QVERIFY(w.width() > itemRect.width());
-    QCOMPARE_GE(view->width(), itemRect.width());
+    QTRY_VERIFY(w.width() > view->visualRect(model.index(0, 0)).width());
+    QCOMPARE_GE(view->width(), view->visualRect(model.index(0, 0)).width());
 }
 
 void tst_QListView::taskQTBUG_51086_skippingIndexesInSelectedIndexes()
@@ -2997,6 +2995,7 @@ void tst_QListView::internalDragDropMove()
     // The test relies on the global position of mouse events; make sure
     // the window is properly mapped on X11.
     QVERIFY(QTest::qWaitForWindowActive(&list));
+    QTRY_VERIFY(QApplication::topLevelAt(list.geometry().center()));
     QVERIFY(QTest::qWaitFor([&]() { return list.m_gotValidResizeEvent; }));
     // execute as soon as the eventloop is running again
     // which is the case inside list.startDrag()

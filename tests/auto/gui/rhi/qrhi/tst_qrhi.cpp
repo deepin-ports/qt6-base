@@ -6,6 +6,9 @@
 #include <QFile>
 #include <QOffscreenSurface>
 #include <QPainter>
+#include <QSpan>
+#include <QRegularExpression>
+#include <QOperatingSystemVersion>
 #include <qrgbafloat.h>
 #include <qrgba64.h>
 
@@ -41,6 +44,10 @@ class tst_QRhi : public QObject
 {
     Q_OBJECT
 
+private:
+    template<typename T, std::size_t E, typename ParamStringifier>
+    void rhiTestDataWithParam(const char *paramName, QSpan<T, E> paramValues, ParamStringifier &&paramStringifier);
+
 private slots:
     void initTestCase();
     void cleanupTestCase();
@@ -48,6 +55,8 @@ private slots:
     void rhiTestData();
     void create_data();
     void create();
+    void adapters_data();
+    void adapters();
     void stats_data();
     void stats();
     void nativeHandles_data();
@@ -85,6 +94,8 @@ private slots:
     void renderPassDescriptorClone();
     void textureWithSampleCount_data();
     void textureWithSampleCount();
+    void textureFormats_data();
+    void textureFormats();
 
     void renderToTextureSimple_data();
     void renderToTextureSimple();
@@ -100,6 +111,8 @@ private slots:
     void renderToTextureSampleWithSeparateTextureAndSampler();
     void renderToTextureArrayOfTexturedQuad_data();
     void renderToTextureArrayOfTexturedQuad();
+    void renderToTextureArrayOfSampledTextures_data();
+    void renderToTextureArrayOfSampledTextures();
     void renderToTextureTexturedQuadAndUniformBuffer_data();
     void renderToTextureTexturedQuadAndUniformBuffer();
     void renderToTextureTexturedQuadAllDynamicBuffers_data();
@@ -116,14 +129,22 @@ private slots:
     void renderToTextureIndexedDraw();
     void renderToTextureArrayMultiView_data();
     void renderToTextureArrayMultiView();
+    void renderToTextureSameSrbDifferentShaders_data();
+    void renderToTextureSameSrbDifferentShaders();
+    void renderToTextureScissorChange_data();
+    void renderToTextureScissorChange();
     void renderToWindowSimple_data();
     void renderToWindowSimple();
+    void continuousReadbackFromWindow_data();
+    void continuousReadbackFromWindow();
     void finishWithinSwapchainFrame_data();
     void finishWithinSwapchainFrame();
     void resourceUpdateBatchBufferTextureWithSwapchainFrames_data();
     void resourceUpdateBatchBufferTextureWithSwapchainFrames();
     void textureRenderTargetAutoRebuild_data();
     void textureRenderTargetAutoRebuild();
+    void renderToMRTPerRenderTargetBlending();
+    void renderToMRTPerRenderTargetBlending_data();
 
     void pipelineCache_data();
     void pipelineCache();
@@ -159,6 +180,7 @@ private slots:
 
 private:
     void setWindowType(QWindow *window, QRhi::Implementation impl);
+    bool isAndroidOpenGLSwiftShader(QRhi::Implementation impl, const QRhi *rhi);
 
     struct {
         QRhiNullInitParams null;
@@ -255,6 +277,68 @@ void tst_QRhi::rhiTestData()
 #endif
 }
 
+template<typename T, std::size_t E, typename ParamStringifier>
+void tst_QRhi::rhiTestDataWithParam(const char *paramName, QSpan<T, E> paramValues, ParamStringifier &&paramStringifier)
+{
+    QTest::addColumn<QRhi::Implementation>("impl");
+    QTest::addColumn<QRhiInitParams *>("initParams");
+    QTest::addColumn<T>(paramName);
+
+#ifndef Q_OS_WEBOS
+    for (auto &paramValue : paramValues) {
+        QTest::newRow(qPrintable(QStringLiteral("Null-") + paramStringifier(paramValue)))
+            << QRhi::Null << static_cast<QRhiInitParams *>(&initParams.null) << paramValue;
+    }
+#endif
+#ifdef TST_GL
+    if (QGuiApplicationPrivate::platformIntegration()->hasCapability(QPlatformIntegration::OpenGL)) {
+        for (auto &paramValue : paramValues) {
+            QTest::newRow(qPrintable(QStringLiteral("OpenGL-") + paramStringifier(paramValue)))
+                << QRhi::OpenGLES2 << static_cast<QRhiInitParams *>(&initParams.gl) << paramValue;
+        }
+    }
+#endif
+#ifdef TST_VK
+    if (vulkanInstance.isValid()) {
+        for (auto &paramValue : paramValues) {
+            QTest::newRow(qPrintable(QStringLiteral("Vulkan-") + paramStringifier(paramValue)))
+                << QRhi::Vulkan << static_cast<QRhiInitParams *>(&initParams.vk) << paramValue;
+        }
+    }
+#endif
+#ifdef TST_D3D11
+    for (auto &paramValue : paramValues) {
+        QTest::newRow(qPrintable(QStringLiteral("Direct3D11-") + paramStringifier(paramValue)))
+            << QRhi::D3D11 << static_cast<QRhiInitParams *>(&initParams.d3d11) << paramValue;
+    }
+#endif
+#ifdef TST_D3D12
+    for (auto &paramValue : paramValues) {
+        QTest::newRow(qPrintable(QStringLiteral("Direct3D12-") + paramStringifier(paramValue)))
+            << QRhi::D3D12 << static_cast<QRhiInitParams *>(&initParams.d3d12) << paramValue;
+    }
+#endif
+#ifdef TST_MTL
+    for (auto &paramValue : paramValues) {
+        QTest::newRow(qPrintable(QStringLiteral("Metal-") + paramStringifier(paramValue)))
+            << QRhi::Metal << static_cast<QRhiInitParams *>(&initParams.mtl) << paramValue;
+    }
+#endif
+}
+
+bool tst_QRhi::isAndroidOpenGLSwiftShader(QRhi::Implementation impl, const QRhi *rhi)
+{
+#ifdef Q_OS_ANDROID
+    qWarning() << rhi->driverInfo();
+    if (impl == QRhi::OpenGLES2 && rhi->driverInfo().deviceName.contains("SwiftShader"))
+        return true;
+#else
+    Q_UNUSED(impl);
+    Q_UNUSED(rhi);
+#endif
+    return false;
+}
+
 void tst_QRhi::create_data()
 {
     rhiTestData();
@@ -296,10 +380,10 @@ void tst_QRhi::create()
                 cleanupOk += 1;
         };
         rhi->addCleanupCallback(cleanupFunc);
-        rhi->runCleanup();
-        QCOMPARE(cleanupOk, 1);
-        cleanupOk = 0;
         rhi->addCleanupCallback(cleanupFunc);
+        rhi->addCleanupCallback(reinterpret_cast<const void *>(quintptr(1234)), cleanupFunc);
+        rhi->addCleanupCallback(reinterpret_cast<const void *>(quintptr(12345)), cleanupFunc);
+        rhi->removeCleanupCallback(reinterpret_cast<const void *>(quintptr(1234)));
 
         QRhiResourceUpdateBatch *resUpd = rhi->nextResourceUpdateBatch();
         QVERIFY(resUpd);
@@ -437,8 +521,78 @@ void tst_QRhi::create()
         QVERIFY(!rhi->isDeviceLost());
 
         rhi.reset();
-        QCOMPARE(cleanupOk, 1);
+        QCOMPARE(cleanupOk, 3);
     }
+}
+
+void tst_QRhi::adapters_data()
+{
+    rhiTestData();
+}
+
+void tst_QRhi::adapters()
+{
+    QFETCH(QRhi::Implementation, impl);
+    QFETCH(QRhiInitParams *, initParams);
+
+    QRhi::AdapterList adapters = QRhi::enumerateAdapters(impl, initParams);
+    for (QRhiAdapter *adapter : adapters)
+        qDebug() << adapter->info();
+
+    if (!adapters.isEmpty()) {
+        QRhi *rhi = QRhi::create(impl, initParams, QRhi::Flags(), nullptr, adapters[0]);
+        if (rhi) {
+            QCOMPARE(rhi->driverInfo().deviceName, adapters[0]->info().deviceName);
+            QCOMPARE(rhi->driverInfo().deviceId, adapters[0]->info().deviceId);
+            QCOMPARE(rhi->driverInfo().vendorId, adapters[0]->info().vendorId);
+            QCOMPARE(rhi->driverInfo().deviceType, adapters[0]->info().deviceType);
+        }
+        delete rhi;
+
+        // test filtering based on luid/physdev
+        if (impl == QRhi::D3D11) {
+#ifdef TST_D3D11
+            QRhi *rhi = QRhi::create(impl, initParams);
+            if (rhi) {
+                QRhiD3D11NativeHandles h = *static_cast<const QRhiD3D11NativeHandles *>(rhi->nativeHandles());
+                delete rhi;
+                if (h.adapterLuidLow || h.adapterLuidHigh) {
+                    QRhi::AdapterList filteredList = QRhi::enumerateAdapters(impl, initParams, &h);
+                    QCOMPARE(filteredList.count(), 1);
+                    qDeleteAll(filteredList);
+                }
+            }
+#endif
+        } else if (impl == QRhi::D3D12) {
+#ifdef TST_D3D12
+            QRhi *rhi = QRhi::create(impl, initParams);
+            if (rhi) {
+                QRhiD3D12NativeHandles h = *static_cast<const QRhiD3D12NativeHandles *>(rhi->nativeHandles());
+                delete rhi;
+                if (h.adapterLuidLow || h.adapterLuidHigh) {
+                    QRhi::AdapterList filteredList = QRhi::enumerateAdapters(impl, initParams, &h);
+                    QCOMPARE(filteredList.count(), 1);
+                    qDeleteAll(filteredList);
+                }
+            }
+#endif
+        } else if (impl == QRhi::Vulkan) {
+#ifdef TST_VK
+            QRhi *rhi = QRhi::create(impl, initParams);
+            if (rhi) {
+                QRhiVulkanNativeHandles h = *static_cast<const QRhiVulkanNativeHandles *>(rhi->nativeHandles());
+                delete rhi;
+                QVERIFY(h.physDev);
+                QRhi::AdapterList filteredList = QRhi::enumerateAdapters(impl, initParams, &h);
+                QCOMPARE(filteredList.count(), 1);
+                qDeleteAll(filteredList);
+            }
+#endif
+        }
+    }
+
+    qDeleteAll(adapters);
+    adapters.clear();
 }
 
 void tst_QRhi::stats_data()
@@ -1273,6 +1427,19 @@ void tst_QRhi::resourceUpdateBatchRGBATextureUpload()
                             inputImage.format());
 
         QVERIFY(imageRGBAEquals(inputImage, wrapperImage));
+
+        // Now try uploading to position (0, 1) which is out of bounds by one
+        // row. This is expected to lead to printing a warning, and clamping the
+        // upload size so that the underlying 3D APIs will not crash.
+        if (impl != QRhi::Null) {
+            QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("Invalid texture upload issued.+")));
+            QRhiResourceUpdateBatch *batch = rhi->nextResourceUpdateBatch();
+            QRhiTextureSubresourceUploadDescription subresDesc(inputImage);
+            subresDesc.setDestinationTopLeft(QPoint(0, 1));
+            QRhiTextureUploadDescription uploadDesc(QRhiTextureUploadEntry(0, 0, subresDesc));
+            batch->uploadTexture(texture.data(), uploadDesc);
+            QVERIFY(submitResourceUpdates(rhi.data(), batch));
+        }
     }
 }
 
@@ -1969,6 +2136,7 @@ void tst_QRhi::renderToTextureCubemapFace()
 
     const int LAYER = 1; // render into the layer for face -X
     const int BAD_LAYER = 2; // +Y
+    const QColor badLayerColor = Qt::green;
 
     QRhiColorAttachment colorAtt(texture.data());
     colorAtt.setLayer(LAYER);
@@ -1990,6 +2158,16 @@ void tst_QRhi::renderToTextureCubemapFace()
     QScopedPointer<QRhiBuffer> vbuf(rhi->newBuffer(QRhiBuffer::Immutable, QRhiBuffer::VertexBuffer, sizeof(triangleVertices)));
     QVERIFY(vbuf->create());
     updates->uploadStaticBuffer(vbuf.data(), triangleVertices);
+
+    // The face we do not render into gets read back later on. Give it a known
+    // content: reading back a texture subresource that was never written to
+    // gives undefined results, and with D3D12 it makes the debug layer complain
+    // as well, because such a subresource is not initialized.
+    QImage badLayerImage(outputSize, QImage::Format_RGBA8888);
+    badLayerImage.fill(badLayerColor);
+    updates->uploadTexture(texture.data(),
+                           QRhiTextureUploadDescription({ BAD_LAYER, 0,
+                                                          QRhiTextureSubresourceUploadDescription(badLayerImage) }));
 
     QScopedPointer<QRhiShaderResourceBindings> srb(rhi->newShaderResourceBindings());
     QVERIFY(srb->create());
@@ -2016,7 +2194,7 @@ void tst_QRhi::renderToTextureCubemapFace()
     readbackDescription.setLayer(LAYER);
     readbackBatch->readBackTexture(readbackDescription, &readResult);
 
-    // also read back a layer we did not render into
+    // also read back a layer we did not render into, only uploaded to
     QRhiReadbackResult readResult2;
     QImage result2;
     readResult2.completed = [&readResult2, &result2] {
@@ -2041,6 +2219,9 @@ void tst_QRhi::renderToTextureCubemapFace()
     // just want to ensure that we did not read the same thing back twice, i.e.
     // that the 'layer' parameter was not ignored
     QVERIFY(result != result2);
+
+    // the face we only uploaded to must have the uploaded content
+    QCOMPARE(result2.pixelColor(result2.width() / 2, result2.height() / 2), badLayerColor);
 
     const int y = 100;
     const quint32 *p = reinterpret_cast<const quint32 *>(result.constScanLine(y));
@@ -2083,6 +2264,11 @@ void tst_QRhi::renderToTextureTextureArray()
 
     if (!rhi->isFeatureSupported(QRhi::TextureArrays))
         QSKIP("TextureArrays is not supported with this backend, skipping test");
+
+    if (isAndroidOpenGLSwiftShader(impl, rhi.get())) {
+        QSKIP("SwiftShader software acceleration is used which does not support this OpenGLES "
+              "feature. See QTBUG-132934");
+    }
 
     const QSize outputSize(512, 256);
     const int ARRAY_SIZE = 8;
@@ -2284,7 +2470,7 @@ void tst_QRhi::renderToTextureTexturedQuad()
     // just happens to give correct results with our OpenGL-targeted vertex and
     // UV data.
     if (rhi->isYUpInFramebuffer() != rhi->isYUpInNDC())
-        result = std::move(result).mirrored();
+        result.flip();
 
     // check a few points that are expected to match regardless of the implementation
     QRgb white = qRgba(255, 255, 255, 255);
@@ -2321,6 +2507,12 @@ void tst_QRhi::renderToTextureSampleWithSeparateTextureAndSampler()
 
     QFETCH(QRhi::Implementation, impl);
     QFETCH(QRhiInitParams *, initParams);
+
+#ifdef Q_OS_ANDROID
+    if (impl == QRhi::Vulkan) {
+        QSKIP("This function fails with Vulkan on Android, see QTQAINFRA-6926 for more info.");
+    }
+#endif
 
     QScopedPointer<QRhi> rhi(QRhi::create(impl, initParams, QRhi::Flags(), nullptr));
     if (!rhi)
@@ -2410,7 +2602,7 @@ void tst_QRhi::renderToTextureSampleWithSeparateTextureAndSampler()
         return;
 
     if (rhi->isYUpInFramebuffer() != rhi->isYUpInNDC())
-        result = std::move(result).mirrored();
+        result.flip();
 
     QRgb white = qRgba(255, 255, 255, 255);
     QCOMPARE(result.pixel(79, 77), white);
@@ -2444,6 +2636,11 @@ void tst_QRhi::renderToTextureArrayOfTexturedQuad()
     QScopedPointer<QRhi> rhi(QRhi::create(impl, initParams, QRhi::Flags(), nullptr));
     if (!rhi)
         QSKIP("QRhi could not be created, skipping testing rendering");
+
+    if (isAndroidOpenGLSwiftShader(impl, rhi.get())) {
+        QSKIP("SwiftShader software acceleration is used which does not support this OpenGLES "
+              "feature. See QTBUG-132934");
+    }
 
     QImage inputImage;
     inputImage.load(QLatin1String(":/data/qt256.png"));
@@ -2554,7 +2751,7 @@ void tst_QRhi::renderToTextureArrayOfTexturedQuad()
     // just happens to give correct results with our OpenGL-targeted vertex and
     // UV data.
     if (rhi->isYUpInFramebuffer() != rhi->isYUpInNDC())
-        result = std::move(result).mirrored();
+        result.flip();
 
     // we added the input image + red + green together, so red and green must be all 1
     for (int y = 0; y < result.height(); ++y) {
@@ -2563,6 +2760,164 @@ void tst_QRhi::renderToTextureArrayOfTexturedQuad()
             QCOMPARE(qRed(pixel), 255);
             QCOMPARE(qGreen(pixel), 255);
         }
+    }
+}
+
+void tst_QRhi::renderToTextureArrayOfSampledTextures_data()
+{
+    rhiTestData();
+}
+
+void tst_QRhi::renderToTextureArrayOfSampledTextures()
+{
+    // Like renderToTextureArrayOfTexturedQuad, but each element of the array of
+    // combined image samplers is sampled into a column of its own, so the
+    // result also tells which texture ended up where in the array. Unlike most
+    // other shaders here, these have SM 6.0 bytecode as well: with D3D12 that
+    // is what makes an array of textures/samplers appear as a single
+    // shader-declared descriptor range, which a root signature built from a
+    // series of one-descriptor ranges does not satisfy.
+
+    QFETCH(QRhi::Implementation, impl);
+    QFETCH(QRhiInitParams *, initParams);
+
+    QScopedPointer<QRhi> rhi(QRhi::create(impl, initParams, QRhi::Flags(), nullptr));
+    if (!rhi)
+        QSKIP("QRhi could not be created, skipping testing rendering");
+
+    if (isAndroidOpenGLSwiftShader(impl, rhi.get())) {
+        QSKIP("SwiftShader software acceleration is used which does not support this OpenGLES "
+              "feature. See QTBUG-132934");
+    }
+
+#ifdef Q_OS_WIN
+    // The in-box software rasterizer ('Microsoft Basic Render Driver', vendor
+    // 0x1414) in Windows 10 samples the wrong element of the array, even though
+    // pipeline creation succeeds. This is specific to the DXIL (SM 6.0) shader
+    // the D3D12 backend picks here: the SM 5.0 based
+    // renderToTextureArrayOfTexturedQuad passes on the same machine. Does not
+    // happen with the much newer WARP in Windows 11, nor with real GPUs, so
+    // keep testing everywhere else.
+    if (impl == QRhi::D3D12 && rhi->driverInfo().vendorId == 0x1414
+            && QOperatingSystemVersion::current() < QOperatingSystemVersion::Windows11)
+    {
+        QSKIP("Windows 10 software rasterizer is used which cannot sample an array of "
+              "textures correctly with SM 6.0 shaders");
+    }
+#endif
+
+    constexpr int ARRAY_SIZE = 8; // must match the shader
+    static const QRgb colors[ARRAY_SIZE] = {
+        qRgb(255, 0, 0), qRgb(0, 255, 0), qRgb(0, 0, 255), qRgb(255, 255, 0),
+        qRgb(255, 0, 255), qRgb(0, 255, 255), qRgb(255, 255, 255), qRgb(128, 128, 128)
+    };
+    const QSize outputSize(8 * ARRAY_SIZE, 32);
+
+    QScopedPointer<QRhiTexture> texture(rhi->newTexture(QRhiTexture::RGBA8, outputSize, 1,
+                                                        QRhiTexture::RenderTarget | QRhiTexture::UsedAsTransferSource));
+    QVERIFY(texture->create());
+
+    QScopedPointer<QRhiTextureRenderTarget> rt(rhi->newTextureRenderTarget({ texture.data() }));
+    QScopedPointer<QRhiRenderPassDescriptor> rpDesc(rt->newCompatibleRenderPassDescriptor());
+    rt->setRenderPassDescriptor(rpDesc.data());
+    QVERIFY(rt->create());
+
+    QRhiCommandBuffer *cb = nullptr;
+    QVERIFY(rhi->beginOffscreenFrame(&cb) == QRhi::FrameOpSuccess);
+    QVERIFY(cb);
+
+    QRhiResourceUpdateBatch *updates = rhi->nextResourceUpdateBatch();
+
+    QScopedPointer<QRhiBuffer> vbuf(rhi->newBuffer(QRhiBuffer::Immutable, QRhiBuffer::VertexBuffer, sizeof(quadVerticesUvs)));
+    QVERIFY(vbuf->create());
+    updates->uploadStaticBuffer(vbuf.data(), quadVerticesUvs);
+
+    std::unique_ptr<QRhiTexture> inputTextures[ARRAY_SIZE];
+    for (int i = 0; i < ARRAY_SIZE; ++i) {
+        QImage image(QSize(16, 16), QImage::Format_RGBA8888);
+        image.fill(QColor::fromRgb(colors[i]));
+        inputTextures[i].reset(rhi->newTexture(QRhiTexture::RGBA8, image.size()));
+        QVERIFY(inputTextures[i]->create());
+        updates->uploadTexture(inputTextures[i].get(), image);
+    }
+
+    // Two different samplers, so that the array is not just the same sampler
+    // repeated. (with some backends an array of samplers needs a set of
+    // consecutive native sampler descriptors of its own) The input textures are
+    // single color fills, so the filtering does not affect the result.
+    QScopedPointer<QRhiSampler> nearestSampler(rhi->newSampler(QRhiSampler::Nearest, QRhiSampler::Nearest, QRhiSampler::None,
+                                                               QRhiSampler::ClampToEdge, QRhiSampler::ClampToEdge));
+    QVERIFY(nearestSampler->create());
+    QScopedPointer<QRhiSampler> linearSampler(rhi->newSampler(QRhiSampler::Linear, QRhiSampler::Linear, QRhiSampler::None,
+                                                              QRhiSampler::ClampToEdge, QRhiSampler::ClampToEdge));
+    QVERIFY(linearSampler->create());
+
+    QRhiShaderResourceBinding::TextureAndSampler texSamplers[ARRAY_SIZE];
+    for (int i = 0; i < ARRAY_SIZE; ++i) {
+        texSamplers[i] = { inputTextures[i].get(),
+                           i % 2 ? linearSampler.data() : nearestSampler.data() };
+    }
+
+    QScopedPointer<QRhiShaderResourceBindings> srb(rhi->newShaderResourceBindings());
+    srb->setBindings({
+                         QRhiShaderResourceBinding::sampledTextures(0, QRhiShaderResourceBinding::FragmentStage, ARRAY_SIZE, texSamplers)
+                     });
+    QVERIFY(srb->create());
+
+    QScopedPointer<QRhiGraphicsPipeline> pipeline(rhi->newGraphicsPipeline());
+    pipeline->setTopology(QRhiGraphicsPipeline::TriangleStrip);
+    QShader vs = loadShader(":/data/arrayofsampledtextures.vert.qsb");
+    QVERIFY(vs.isValid());
+    QShader fs = loadShader(":/data/arrayofsampledtextures.frag.qsb");
+    QVERIFY(fs.isValid());
+    pipeline->setShaderStages({ { QRhiShaderStage::Vertex, vs }, { QRhiShaderStage::Fragment, fs } });
+    QRhiVertexInputLayout inputLayout;
+    inputLayout.setBindings({ { 4 * sizeof(float) } });
+    inputLayout.setAttributes({
+                                  { 0, 0, QRhiVertexInputAttribute::Float2, 0 },
+                                  { 0, 1, QRhiVertexInputAttribute::Float2, 2 * sizeof(float) }
+                              });
+    pipeline->setVertexInputLayout(inputLayout);
+    pipeline->setShaderResourceBindings(srb.data());
+    pipeline->setRenderPassDescriptor(rpDesc.data());
+
+    QVERIFY(pipeline->create());
+
+    cb->beginPass(rt.data(), Qt::black, { 1.0f, 0 }, updates);
+    cb->setGraphicsPipeline(pipeline.data());
+    cb->setShaderResources();
+    cb->setViewport({ 0, 0, float(outputSize.width()), float(outputSize.height()) });
+    QRhiCommandBuffer::VertexInput vbindings(vbuf.data(), 0);
+    cb->setVertexInput(0, 1, &vbindings);
+    cb->draw(4);
+
+    QRhiReadbackResult readResult;
+    QImage result;
+    readResult.completed = [&readResult, &result] {
+        result = QImage(reinterpret_cast<const uchar *>(readResult.data.constData()),
+                        readResult.pixelSize.width(), readResult.pixelSize.height(),
+                        QImage::Format_RGBA8888_Premultiplied);
+    };
+    QRhiResourceUpdateBatch *readbackBatch = rhi->nextResourceUpdateBatch();
+    readbackBatch->readBackTexture({ texture.data() }, &readResult);
+    cb->endPass(readbackBatch);
+
+    rhi->endOffscreenFrame();
+
+    QVERIFY(!result.isNull());
+
+    if (impl == QRhi::Null)
+        return;
+
+    // No flipping needed here, unlike in the other tests: the columns run along
+    // X, so the Y direction difference between the backends does not change
+    // which column a pixel belongs to.
+    const int columnWidth = outputSize.width() / ARRAY_SIZE;
+    for (int i = 0; i < ARRAY_SIZE; ++i) {
+        const QRgb pixel = result.pixel(i * columnWidth + columnWidth / 2, outputSize.height() / 2);
+        QCOMPARE(qRed(pixel), qRed(colors[i]));
+        QCOMPARE(qGreen(pixel), qGreen(colors[i]));
+        QCOMPARE(qBlue(pixel), qBlue(colors[i]));
     }
 }
 
@@ -2719,8 +3074,8 @@ void tst_QRhi::renderToTextureTexturedQuadAndUniformBuffer()
     QVERIFY(!result1.isNull());
 
     if (rhi->isYUpInFramebuffer() != rhi->isYUpInNDC()) {
-        result0 = std::move(result0).mirrored();
-        result1 = std::move(result1).mirrored();
+        result0.flip();
+        result1.flip();
     }
 
     if (impl == QRhi::Null)
@@ -2926,8 +3281,8 @@ void tst_QRhi::renderToTextureTexturedQuadAllDynamicBuffers()
     QVERIFY(!result1.isNull());
 
     if (rhi->isYUpInFramebuffer() != rhi->isYUpInNDC()) {
-        result0 = std::move(result0).mirrored();
-        result1 = std::move(result1).mirrored();
+        result0.flip();
+        result1.flip();
     }
 
     if (impl == QRhi::Null)
@@ -3087,7 +3442,7 @@ void tst_QRhi::renderToTextureDeferredSrb()
         return;
 
     if (rhi->isYUpInFramebuffer() != rhi->isYUpInNDC())
-        result = std::move(result).mirrored();
+        result.flip();
 
     // opacity 0.5 (premultiplied)
     static const auto checkSemiWhite = [](const QRgb &c) {
@@ -3228,7 +3583,7 @@ void tst_QRhi::renderToTextureDeferredUpdateSamplerInSrb()
         return;
 
     if (rhi->isYUpInFramebuffer() != rhi->isYUpInNDC())
-        result = std::move(result).mirrored();
+        result.flip();
 
     // opacity 0.5 (premultiplied)
     static const auto checkSemiWhite = [](const QRgb &c) {
@@ -3361,7 +3716,7 @@ void tst_QRhi::renderToTextureMultipleUniformBuffersAndDynamicOffset()
     // "see" an all zero matrix and zero opacity, thus leading to different
     // rendering output. This way we can verify if using dynamic offsets, and
     // more than one at the same time, is functional.
-    QVarLengthArray<QPair<int, quint32>, 2> dynamicOffset = {
+    QVarLengthArray<std::pair<int, quint32>, 2> dynamicOffset = {
         { 0, quint32(ubufElemSize * 2) },
         { 1, quint32(ubuf2ElemSize * 3) },
     };
@@ -3391,7 +3746,7 @@ void tst_QRhi::renderToTextureMultipleUniformBuffersAndDynamicOffset()
         return;
 
     if (rhi->isYUpInFramebuffer() != rhi->isYUpInNDC())
-        result = std::move(result).mirrored();
+        result.flip();
 
     // opacity 0.5 (premultiplied)
     static const auto checkSemiWhite = [](const QRgb &c) {
@@ -3540,7 +3895,7 @@ void tst_QRhi::renderToTextureSrbReuse()
         return;
 
     if (rhi->isYUpInFramebuffer() != rhi->isYUpInNDC())
-        result = std::move(result).mirrored();
+        result.flip();
 
     // opacity 0.5 (premultiplied)
     static const auto checkSemiWhite = [](const QRgb &c) {
@@ -3724,8 +4079,14 @@ void tst_QRhi::renderToTextureArrayMultiView()
     if (!rhi->isFeatureSupported(QRhi::MultiView))
         QSKIP("Multiview not supported, skipping testing on this backend");
 
+    if (qgetenv("XDG_CURRENT_DESKTOP").toLower().contains("ubuntu") && QSysInfo::productVersion().startsWith("24"))
+        QSKIP("Multiview not supported, skipping testing on this backend");
+
     if (rhi->backend() == QRhi::Vulkan && rhi->driverInfo().deviceType == QRhiDriverInfo::CpuDevice)
         QSKIP("lavapipe does not like multiview, skip for now");
+
+    if (QSysInfo::productType() == "opensuse-leap" && QSysInfo::productVersion() == QLatin1String("16.0") && rhi->backend() == QRhi::OpenGLES2)
+        QSKIP("QTBUG-141769: opensuse-leap 16.0 fails with OpenGL, skip for now");
 
     for (int sampleCount : rhi->supportedSampleCounts()) {
         const QSize outputSize(1920, 1080);
@@ -3846,13 +4207,13 @@ void tst_QRhi::renderToTextureArrayMultiView()
                             readResult[0].pixelSize.width(), readResult[0].pixelSize.height(),
                             QImage::Format_RGBA8888);
         if (rhi->isYUpInFramebuffer()) // note that we used clipSpaceCorrMatrix
-            image0 = image0.mirrored();
+            image0.flip();
 
         QImage image1 = QImage(reinterpret_cast<const uchar *>(readResult[1].data.constData()),
                             readResult[1].pixelSize.width(), readResult[1].pixelSize.height(),
                             QImage::Format_RGBA8888);
         if (rhi->isYUpInFramebuffer())
-            image1 = image1.mirrored();
+            image1.flip();
 
         QVERIFY(!image0.isNull());
         QVERIFY(!image1.isNull());
@@ -3881,6 +4242,157 @@ void tst_QRhi::renderToTextureArrayMultiView()
         }
         QVERIFY(n >= 10);
     }
+}
+
+void tst_QRhi::renderToTextureScissorChange_data()
+{
+    rhiTestData();
+}
+
+void tst_QRhi::renderToTextureScissorChange()
+{
+    QFETCH(QRhi::Implementation, impl);
+    QFETCH(QRhiInitParams *, initParams);
+
+    std::unique_ptr<QRhi> rhi(QRhi::create(impl, initParams, QRhi::Flags(), nullptr));
+    if (!rhi)
+        QSKIP("QRhi could not be created, skipping testing rendering");
+
+#ifdef TST_GL
+    if (impl == QRhi::OpenGLES2) {
+        rhi->makeThreadLocalNativeContextCurrent();
+        QOpenGLContext *ctx = QOpenGLContext::currentContext();
+        // because of gl_VertexId in the shader, which is added in GLSL 130 and GLSL ES 300
+        if (!ctx || ctx->format().majorVersion() < 3)
+            QSKIP("This test needs at least OpenGL 3.0 or OpenGL ES 3.0, skipping on OpenGL");
+    }
+#endif
+
+    const QSize outputSize(1920, 1080);
+    std::unique_ptr<QRhiTexture> texture(rhi->newTexture(QRhiTexture::RGBA8, outputSize, 1,
+                                                         QRhiTexture::RenderTarget | QRhiTexture::UsedAsTransferSource));
+    QVERIFY(texture->create());
+
+    std::unique_ptr<QRhiTextureRenderTarget> rt(rhi->newTextureRenderTarget({ texture.get() }));
+    std::unique_ptr<QRhiRenderPassDescriptor> rpDesc(rt->newCompatibleRenderPassDescriptor());
+    rt->setRenderPassDescriptor(rpDesc.get());
+    QVERIFY(rt->create());
+
+    QRhiCommandBuffer *cb = nullptr;
+    QVERIFY(rhi->beginOffscreenFrame(&cb) == QRhi::FrameOpSuccess);
+    QVERIFY(cb);
+
+    QRhiResourceUpdateBatch *updates = rhi->nextResourceUpdateBatch();
+
+    std::unique_ptr<QRhiBuffer> ubuf(rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 16));
+    QVERIFY(ubuf->create());
+    QVector4D color = { 1.0f, 0.0f, 0.0f, 1.0f };
+    updates->updateDynamicBuffer(ubuf.get(), 0, 16, &color);
+
+    std::unique_ptr<QRhiShaderResourceBindings> srb(rhi->newShaderResourceBindings());
+    srb->setBindings({
+        QRhiShaderResourceBinding::uniformBuffer(0, QRhiShaderResourceBinding::FragmentStage, ubuf.get()),
+    });
+    QVERIFY(srb->create());
+
+    auto setupPipeline = [&srb, &rpDesc](QRhiGraphicsPipeline *pipeline) {
+        QShader vs = loadShader(":/data/fullscreenquad.vert.qsb");
+        QShader fs = loadShader(":/data/fullscreenquad_color.frag.qsb");
+        pipeline->setShaderStages({ { QRhiShaderStage::Vertex, vs }, { QRhiShaderStage::Fragment, fs } });
+        pipeline->setShaderResourceBindings(srb.get());
+        pipeline->setRenderPassDescriptor(rpDesc.get());
+    };
+
+    std::unique_ptr<QRhiGraphicsPipeline> pipeline(rhi->newGraphicsPipeline());
+    setupPipeline(pipeline.get());
+    QVERIFY(pipeline->create());
+
+    std::unique_ptr<QRhiGraphicsPipeline> scissoringPipeline(rhi->newGraphicsPipeline());
+    setupPipeline(scissoringPipeline.get());
+    scissoringPipeline->setFlags(QRhiGraphicsPipeline::UsesScissor);
+    QVERIFY(scissoringPipeline->create());
+
+    cb->beginPass(rt.get(), Qt::white, { 1.0f, 0 }, updates);
+    // fullscreen quad, scissored to (bottom-left) 100x100 - 300x300
+    cb->setGraphicsPipeline(scissoringPipeline.get());
+    cb->setViewport({ 0, 0, float(outputSize.width()), float(outputSize.height()) });
+    cb->setShaderResources();
+    cb->setScissor({ 100, 100, 200, 200 });
+    cb->draw(3);
+    cb->endPass();
+
+    QRhiReadbackResult readResult;
+    QImage result;
+    readResult.completed = [&readResult, &result] {
+        result = QImage(reinterpret_cast<const uchar *>(readResult.data.constData()),
+                        readResult.pixelSize.width(), readResult.pixelSize.height(),
+                        QImage::Format_RGBA8888_Premultiplied); // non-owning, no copy needed because readResult outlives result
+    };
+    QRhiResourceUpdateBatch *readbackBatch = rhi->nextResourceUpdateBatch();
+    readbackBatch->readBackTexture({ texture.get() }, &readResult);
+    cb->resourceUpdate(readbackBatch);
+    rhi->finish();
+
+    if (rhi->isYUpInFramebuffer())
+        result = result.flipped();
+
+    if (rhi->backend() != QRhi::Null) {
+        // 200x200 red rect at (bottom left) 100,100
+        int y = outputSize.height() - 1 - 150;
+        int redCount = 0;
+        for (int x = 100; x < 100 + 300; ++x) {
+            QRgb c = result.pixel(x, y);
+            if (qRed(c) >= 254 && qGreen(c) == 0 && qBlue(c) == 0)
+                ++redCount;
+        }
+        QVERIFY(redCount == 200);
+
+        // should be white outside the scissor rect
+        y = outputSize.height() - 50;
+        redCount = 0;
+        for (int x = 100; x < 100 + 300; ++x) {
+            QRgb c = result.pixel(x, y);
+            if (qRed(c) >= 254 && qGreen(c) == 0 && qBlue(c) == 0)
+                ++redCount;
+        }
+        QCOMPARE(redCount, 0);
+    }
+
+    cb->beginPass(rt.get(), Qt::white, { 1.0f, 0 });
+
+    // fullscreen quad, scissored to (bottom-left) 100x100 - 300x300
+    cb->setGraphicsPipeline(scissoringPipeline.get());
+    cb->setViewport({ 0, 0, float(outputSize.width()), float(outputSize.height()) });
+    cb->setShaderResources();
+    cb->setScissor({ 100, 100, 200, 200 });
+    cb->draw(3);
+
+    // switch to the non-UsesScissor pipeline, the end result should be the whole textured filled with red,
+    // the scissoring is expected to be "disabled" (or made to match the viewport) automatically
+    cb->setGraphicsPipeline(pipeline.get());
+    cb->setShaderResources();
+    cb->draw(3);
+
+    cb->endPass();
+
+    readbackBatch = rhi->nextResourceUpdateBatch();
+    readbackBatch->readBackTexture({ texture.get() }, &readResult);
+    cb->resourceUpdate(readbackBatch);
+    rhi->finish();
+
+    if (rhi->backend() != QRhi::Null) {
+        const int y = outputSize.height() - 1 - 150;
+        // no scissoring, everything is supposed to be red
+        int nonRedCount = 0;
+        for (int x = 100; x < 100 + 300; ++x) {
+            QRgb c = result.pixel(x, y);
+            if (!(qRed(c) >= 254 && qGreen(c) == 0 && qBlue(c) == 0))
+                ++nonRedCount;
+        }
+        QVERIFY(nonRedCount == 0);
+    }
+
+    rhi->endOffscreenFrame();
 }
 
 void tst_QRhi::renderToWindowSimple_data()
@@ -3929,10 +4441,15 @@ void tst_QRhi::renderToWindowSimple()
     const int asyncReadbackFrames = rhi->resourceLimit(QRhi::MaxAsyncReadbackFrames);
     // one frame issues the readback, then we do MaxAsyncReadbackFrames more to ensure the readback completes
     const int FRAME_COUNT = asyncReadbackFrames + 1;
+
     bool readCompleted = false;
     QRhiReadbackResult readResult;
     QImage result;
     int readbackWidth = 0;
+
+    bool readCompletedPartial = false;
+    QRhiReadbackResult readResultPartial;
+    QImage resultPartial;
 
     for (int frameNo = 0; frameNo < FRAME_COUNT; ++frameNo) {
         QVERIFY(rhi->beginFrame(swapChain.data()) == QRhi::FrameOpSuccess);
@@ -3954,6 +4471,7 @@ void tst_QRhi::renderToWindowSimple()
         cb->draw(3);
 
         if (frameNo == 0) {
+            QRhiResourceUpdateBatch *readbackBatch = rhi->nextResourceUpdateBatch();
             readResult.completed = [&readCompleted, &readResult, &result, &rhi] {
                 readCompleted = true;
                 QImage wrapperImage(reinterpret_cast<const uchar *>(readResult.data.constData()),
@@ -3962,13 +4480,30 @@ void tst_QRhi::renderToWindowSimple()
                 if (readResult.format == QRhiTexture::RGBA8)
                     wrapperImage = wrapperImage.rgbSwapped();
                 if (rhi->isYUpInFramebuffer() == rhi->isYUpInNDC())
-                    result = wrapperImage.mirrored();
+                    result = wrapperImage.flipped();
                 else
                     result = wrapperImage.copy();
             };
-            QRhiResourceUpdateBatch *readbackBatch = rhi->nextResourceUpdateBatch();
-            readbackBatch->readBackTexture({}, &readResult); // read back the current backbuffer
+            QRhiReadbackDescription readbackDescription;
+            QVERIFY(!readbackDescription.rect().isValid());
+            readbackBatch->readBackTexture(readbackDescription, &readResult); // read back the current backbuffer
             readbackWidth = outputSize.width();
+            readResultPartial.completed = [&readCompletedPartial, &readResultPartial, &resultPartial, &rhi] {
+                readCompletedPartial = true;
+                QImage wrapperImage(reinterpret_cast<const uchar *>(readResultPartial.data.constData()),
+                                    readResultPartial.pixelSize.width(), readResultPartial.pixelSize.height(),
+                                    QImage::Format_ARGB32_Premultiplied);
+                if (readResultPartial.format == QRhiTexture::RGBA8)
+                    wrapperImage = wrapperImage.rgbSwapped();
+                if (rhi->isYUpInFramebuffer() == rhi->isYUpInNDC())
+                    resultPartial = wrapperImage.flipped();
+                else
+                    resultPartial = wrapperImage.copy();
+            };
+            QRhiReadbackDescription partialReadbackDescription;
+            partialReadbackDescription.setRect({100, 100, 1, 1});
+            QVERIFY(partialReadbackDescription.rect().isValid());
+            readbackBatch->readBackTexture(partialReadbackDescription, &readResultPartial); // read back one pixel at 100,100 of the current backbuffer
             cb->endPass(readbackBatch);
         } else {
             cb->endPass();
@@ -4005,6 +4540,213 @@ void tst_QRhi::renderToWindowSimple()
 
     QCOMPARE(redCount + blueCount, readbackWidth);
     QVERIFY(redCount < blueCount);
+
+    // Verify the backbuffer single-pixel readback
+    QVERIFY(readCompletedPartial);
+    QCOMPARE(readResultPartial.pixelSize, QSize(1, 1));
+    if (rhi->isYUpInFramebuffer() == rhi->isYUpInNDC())
+        result.flip();
+    QCOMPARE(resultPartial.pixelColor(0, 0), result.pixelColor(100, 100));
+}
+
+void tst_QRhi::renderToTextureSameSrbDifferentShaders_data()
+{
+    rhiTestData();
+}
+
+void tst_QRhi::renderToTextureSameSrbDifferentShaders()
+{
+    QFETCH(QRhi::Implementation, impl);
+    QFETCH(QRhiInitParams *, initParams);
+
+    QScopedPointer<QRhi> rhi(QRhi::create(impl, initParams, QRhi::Flags(), nullptr));
+    if (!rhi)
+        QSKIP("QRhi could not be created, skipping testing rendering");
+
+    const QSize outputSize(1920, 1080);
+    QScopedPointer<QRhiTexture> texture(rhi->newTexture(QRhiTexture::RGBA8, outputSize, 1,
+                                                        QRhiTexture::RenderTarget | QRhiTexture::UsedAsTransferSource));
+    QVERIFY(texture->create());
+
+    QScopedPointer<QRhiTextureRenderTarget> rt(rhi->newTextureRenderTarget({ texture.data() }));
+    QScopedPointer<QRhiRenderPassDescriptor> rpDesc(rt->newCompatibleRenderPassDescriptor());
+    rt->setRenderPassDescriptor(rpDesc.data());
+    QVERIFY(rt->create());
+
+    QScopedPointer<QRhiBuffer> vbuf(rhi->newBuffer(QRhiBuffer::Immutable, QRhiBuffer::VertexBuffer, sizeof(triangleVertices)));
+    QVERIFY(vbuf->create());
+
+    QScopedPointer<QRhiBuffer> ubuf1(rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 4));
+    QVERIFY(ubuf1->create());
+    QScopedPointer<QRhiBuffer> ubuf2(rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, 4));
+    QVERIFY(ubuf2->create());
+
+    // one srb, suitable for both vertex shaders (the samesrb_1.vert does not use the buffer at binding 2, that's fine)
+    QScopedPointer<QRhiShaderResourceBindings> srb(rhi->newShaderResourceBindings());
+    srb->setBindings({
+        QRhiShaderResourceBinding::uniformBuffer(1, QRhiShaderResourceBinding::VertexStage, ubuf1.data()),
+        QRhiShaderResourceBinding::uniformBuffer(2, QRhiShaderResourceBinding::VertexStage, ubuf2.data()),
+    });
+    QVERIFY(srb->create());
+
+    QScopedPointer<QRhiGraphicsPipeline> pipeline1(rhi->newGraphicsPipeline());
+    QShader vs = loadShader(":/data/samesrb_1.vert.qsb");
+    QVERIFY(vs.isValid());
+    QShader fs = loadShader(":/data/samesrb.frag.qsb");
+    QVERIFY(fs.isValid());
+    pipeline1->setShaderStages({ { QRhiShaderStage::Vertex, vs }, { QRhiShaderStage::Fragment, fs } });
+    QRhiVertexInputLayout inputLayout;
+    inputLayout.setBindings({ { 2 * sizeof(float) } });
+    inputLayout.setAttributes({ { 0, 0, QRhiVertexInputAttribute::Float2, 0 } });
+    pipeline1->setVertexInputLayout(inputLayout);
+    pipeline1->setShaderResourceBindings(srb.data());
+    pipeline1->setRenderPassDescriptor(rpDesc.data());
+    QVERIFY(pipeline1->create());
+
+    QScopedPointer<QRhiGraphicsPipeline> pipeline2(rhi->newGraphicsPipeline());
+    vs = loadShader(":/data/samesrb_2.vert.qsb");
+    QVERIFY(vs.isValid());
+    pipeline2->setShaderStages({ { QRhiShaderStage::Vertex, vs }, { QRhiShaderStage::Fragment, fs } });
+    pipeline2->setVertexInputLayout(inputLayout);
+    pipeline2->setShaderResourceBindings(srb.data());
+    pipeline2->setRenderPassDescriptor(rpDesc.data());
+    QVERIFY(pipeline2->create());
+
+    QRhiCommandBuffer *cb = nullptr;
+    QVERIFY(rhi->beginOffscreenFrame(&cb) == QRhi::FrameOpSuccess);
+    QVERIFY(cb);
+
+    QRhiResourceUpdateBatch *u = rhi->nextResourceUpdateBatch();
+    u->uploadStaticBuffer(vbuf.data(), triangleVertices);
+    float color1 = 1.0;
+    float color2 = 0.5;
+    u->updateDynamicBuffer(ubuf1.data(), 0, 4, &color1);
+    u->updateDynamicBuffer(ubuf2.data(), 0, 4, &color2);
+    cb->resourceUpdate(u);
+
+    cb->beginPass(rt.data(), Qt::black, { 1.0f, 0 });
+
+    for (int i = 0; i < 4; ++i) {
+        cb->setGraphicsPipeline(pipeline1.data());
+        cb->setViewport({ 0, 0, float(outputSize.width()), float(outputSize.height()) });
+        cb->setShaderResources(srb.data());
+        QRhiCommandBuffer::VertexInput vbindings(vbuf.data(), 0);
+        cb->setVertexInput(0, 1, &vbindings);
+        // triangle, color (1, 1, 1)
+        cb->draw(3);
+
+        // another pipeline, different vertex shader, same srb
+        cb->setGraphicsPipeline(pipeline2.data());
+        cb->setShaderResources(srb.data());
+        // triangle, color (0.5, 0.5, 0.5) (overwriting the previous one)
+        cb->draw(3);
+    }
+
+    QRhiReadbackResult readResult;
+    QImage result;
+    readResult.completed = [&readResult, &result] {
+        result = QImage(reinterpret_cast<const uchar *>(readResult.data.constData()),
+                        readResult.pixelSize.width(), readResult.pixelSize.height(),
+                        QImage::Format_RGBA8888_Premultiplied);
+    };
+    QRhiResourceUpdateBatch *readbackBatch = rhi->nextResourceUpdateBatch();
+    readbackBatch->readBackTexture({ texture.data() }, &readResult);
+    cb->endPass(readbackBatch);
+
+    rhi->endOffscreenFrame();
+    QCOMPARE(result.size(), texture->pixelSize());
+
+    if (impl == QRhi::Null)
+        return;
+
+    QImage image = result;
+    if (rhi->isYUpInFramebuffer())
+        image = result.flipped();
+
+    // before the fix for QTBUG-140795 D3D11 (and 12 in fact) does not render
+    // correctly, and instead of getting a triangle with color (0.5, 0.5, 0.5),
+    // it's just not there; should be with the patch in place, with all backends
+    const int maxFuzz = 4;
+    QRgb c = image.pixel(result.width() / 2, result.height() / 2);
+    QVERIFY(qAbs(qRed(c) - 127) <= maxFuzz && qAbs(qGreen(c) - 127) <= maxFuzz && qAbs(qBlue(c) - 127) <= maxFuzz);
+}
+
+void tst_QRhi::continuousReadbackFromWindow_data()
+{
+    rhiTestData();
+}
+
+void tst_QRhi::continuousReadbackFromWindow()
+{
+    if (QGuiApplication::platformName().startsWith(QLatin1String("offscreen"), Qt::CaseInsensitive))
+        QSKIP("Offscreen: This fails.");
+
+    QFETCH(QRhi::Implementation, impl);
+    QFETCH(QRhiInitParams *, initParams);
+
+    QScopedPointer<QRhi> rhi(QRhi::create(impl, initParams, QRhi::Flags(), nullptr));
+    if (!rhi)
+        QSKIP("QRhi could not be created, skipping testing rendering");
+
+    QScopedPointer<QWindow> window(new QWindow);
+    setWindowType(window.data(), impl);
+
+    window->setGeometry(0, 0, 640, 480);
+    window->show();
+    QVERIFY(QTest::qWaitForWindowExposed(window.data()));
+
+    QScopedPointer<QRhiSwapChain> swapChain(rhi->newSwapChain());
+    swapChain->setWindow(window.data());
+    swapChain->setFlags(QRhiSwapChain::UsedAsTransferSource);
+    QScopedPointer<QRhiRenderPassDescriptor> rpDesc(swapChain->newCompatibleRenderPassDescriptor());
+    swapChain->setRenderPassDescriptor(rpDesc.data());
+    QVERIFY(swapChain->createOrResize());
+
+    QRhiResourceUpdateBatch *updates = rhi->nextResourceUpdateBatch();
+
+    QScopedPointer<QRhiBuffer> vbuf(rhi->newBuffer(QRhiBuffer::Immutable, QRhiBuffer::VertexBuffer, sizeof(triangleVertices)));
+    QVERIFY(vbuf->create());
+    updates->uploadStaticBuffer(vbuf.data(), triangleVertices);
+
+    QScopedPointer<QRhiShaderResourceBindings> srb(rhi->newShaderResourceBindings());
+    QVERIFY(srb->create());
+
+    QScopedPointer<QRhiGraphicsPipeline> pipeline(createSimplePipeline(rhi.data(), srb.data(), rpDesc.data()));
+    QVERIFY(pipeline);
+
+    const int asyncReadbackFrames = rhi->resourceLimit(QRhi::MaxAsyncReadbackFrames);
+    const int FRAME_COUNT = asyncReadbackFrames * 10;
+    QVector<QRhiReadbackResult> readResults(FRAME_COUNT);
+    int readbackCompletedCount = 0;
+
+    for (int frameNo = 0; frameNo < FRAME_COUNT; ++frameNo) {
+        QVERIFY(rhi->beginFrame(swapChain.data()) == QRhi::FrameOpSuccess);
+        QRhiCommandBuffer *cb = swapChain->currentFrameCommandBuffer();
+        QRhiRenderTarget *rt = swapChain->currentFrameRenderTarget();
+        const QSize outputSize = swapChain->currentPixelSize();
+        QRhiViewport viewport(0, 0, float(outputSize.width()), float(outputSize.height()));
+
+        cb->beginPass(rt, Qt::blue, { 1.0f, 0 }, updates);
+        updates = nullptr;
+        cb->setGraphicsPipeline(pipeline.data());
+        cb->setViewport(viewport);
+        QRhiCommandBuffer::VertexInput vbindings(vbuf.data(), 0);
+        cb->setVertexInput(0, 1, &vbindings);
+        cb->draw(3);
+
+        readResults[frameNo].completed = [&readbackCompletedCount] {
+            readbackCompletedCount += 1;
+        };
+        QRhiResourceUpdateBatch *readbackBatch = rhi->nextResourceUpdateBatch();
+        readbackBatch->readBackTexture({}, &readResults[frameNo]); // read back the current backbuffer
+        cb->endPass(readbackBatch);
+
+        rhi->endFrame(swapChain.data());
+    }
+
+    QVERIFY(readbackCompletedCount >= FRAME_COUNT - asyncReadbackFrames);
+    rhi->finish();
+    QCOMPARE(readbackCompletedCount, FRAME_COUNT);
 }
 
 void tst_QRhi::finishWithinSwapchainFrame_data()
@@ -4369,6 +5111,152 @@ void tst_QRhi::textureRenderTargetAutoRebuild()
         texture->setPixelSize(sz);
         QVERIFY(texture->create());
         QCOMPARE(rt->pixelSize(), sz);
+    }
+}
+
+
+void tst_QRhi::renderToMRTPerRenderTargetBlending_data()
+{
+    rhiTestData();
+}
+
+static QRhiGraphicsPipeline *createMRTBLPipeline(QRhi *rhi, QRhiShaderResourceBindings *srb, QRhiRenderPassDescriptor *rpDesc, QRhiGraphicsPipeline::TargetBlend blend[2])
+{
+    std::unique_ptr<QRhiGraphicsPipeline> pipeline(rhi->newGraphicsPipeline());
+    QShader vs = loadShader(":/data/mrtbl.vert.qsb");
+    if (!vs.isValid())
+        return nullptr;
+    QShader fs = loadShader(":/data/mrtbl.frag.qsb");
+    if (!fs.isValid())
+        return nullptr;
+    pipeline->setShaderStages({ { QRhiShaderStage::Vertex, vs }, { QRhiShaderStage::Fragment, fs } });
+    QRhiVertexInputLayout inputLayout;
+    inputLayout.setBindings({ { 2 * sizeof(float) } });
+    inputLayout.setAttributes({ { 0, 0, QRhiVertexInputAttribute::Float2, 0 } });
+    pipeline->setVertexInputLayout(inputLayout);
+    pipeline->setShaderResourceBindings(srb);
+    pipeline->setRenderPassDescriptor(rpDesc);
+    pipeline->setTargetBlends({blend[0], blend[1]});
+    return pipeline->create() ? pipeline.release() : nullptr;
+}
+
+void tst_QRhi::renderToMRTPerRenderTargetBlending()
+{
+    QFETCH(QRhi::Implementation, impl);
+    QFETCH(QRhiInitParams *, initParams);
+
+    QScopedPointer<QRhi> rhi(QRhi::create(impl, initParams, QRhi::Flags(), nullptr));
+    if (!rhi)
+        QSKIP("QRhi could not be created, skipping testing rendering");
+    if (!rhi->isFeatureSupported(QRhi::PerRenderTargetBlending))
+        QSKIP("QRhi::PerRenderTargetBlending not supported, skipping testing rendering");
+
+    const QSize outputSize(1920, 1080);
+    QScopedPointer<QRhiTexture> texture(rhi->newTexture(QRhiTexture::RGBA8, outputSize, 1,
+                                                        QRhiTexture::RenderTarget | QRhiTexture::UsedAsTransferSource));
+    QVERIFY(texture->create());
+
+    QScopedPointer<QRhiTexture> texture2(rhi->newTexture(QRhiTexture::RGBA8, outputSize, 1,
+                                                         QRhiTexture::RenderTarget | QRhiTexture::UsedAsTransferSource));
+    QVERIFY(texture2->create());
+
+    QRhiTextureRenderTargetDescription desc;
+    desc.setColorAttachments({{texture.data()}, {texture2.data()}});
+    QScopedPointer<QRhiTextureRenderTarget> rt(rhi->newTextureRenderTarget(desc));
+    QScopedPointer<QRhiRenderPassDescriptor> rpDesc(rt->newCompatibleRenderPassDescriptor());
+    rt->setRenderPassDescriptor(rpDesc.data());
+    QVERIFY(rt->create());
+
+    QRhiCommandBuffer *cb = nullptr;
+    QVERIFY(rhi->beginOffscreenFrame(&cb) == QRhi::FrameOpSuccess);
+    QVERIFY(cb);
+
+    QRhiResourceUpdateBatch *updates = rhi->nextResourceUpdateBatch();
+
+    QScopedPointer<QRhiBuffer> vbuf(rhi->newBuffer(QRhiBuffer::Immutable, QRhiBuffer::VertexBuffer, sizeof(triangleVertices)));
+    QVERIFY(vbuf->create());
+    updates->uploadStaticBuffer(vbuf.data(), triangleVertices);
+
+    QScopedPointer<QRhiShaderResourceBindings> srb(rhi->newShaderResourceBindings());
+    QVERIFY(srb->create());
+
+    QRhiGraphicsPipeline::TargetBlend blend[2];
+    blend[0].enable = true;    // Use src-over for first rt
+    blend[0].srcColor = QRhiGraphicsPipeline::One;
+    blend[0].dstColor = QRhiGraphicsPipeline::Zero;
+    blend[0].srcAlpha = QRhiGraphicsPipeline::One;
+    blend[0].dstAlpha = QRhiGraphicsPipeline::Zero;
+    blend[1].enable = true;    // Use custom blending second rt
+    blend[1].srcColor = QRhiGraphicsPipeline::Zero;
+    blend[1].dstColor = QRhiGraphicsPipeline::OneMinusSrcColor;
+    blend[1].srcAlpha = QRhiGraphicsPipeline::One;
+    blend[1].dstAlpha = QRhiGraphicsPipeline::Zero;
+
+    QScopedPointer<QRhiGraphicsPipeline> pipeline(createMRTBLPipeline(rhi.data(), srb.data(), rpDesc.data(), blend));
+    QVERIFY(pipeline);
+
+    cb->beginPass(rt.data(), Qt::white, { 1.0f, 0 }, updates);
+    cb->setGraphicsPipeline(pipeline.data());
+    cb->setViewport({ 0, 0, float(outputSize.width()), float(outputSize.height()) });
+    QRhiCommandBuffer::VertexInput vbindings(vbuf.data(), 0);
+    cb->setVertexInput(0, 1, &vbindings);
+    cb->draw(3);
+
+    QRhiReadbackResult readResult1;
+    QImage result1;
+    readResult1.completed = [&readResult1, &result1] {
+        result1 = QImage(reinterpret_cast<const uchar *>(readResult1.data.constData()),
+                        readResult1.pixelSize.width(), readResult1.pixelSize.height(),
+                        QImage::Format_RGBA8888_Premultiplied); // non-owning, no copy needed because readResult outlives result
+    };
+    QRhiReadbackResult readResult2;
+    QImage result2;
+    readResult2.completed = [&readResult2, &result2] {
+        result2 = QImage(reinterpret_cast<const uchar *>(readResult2.data.constData()),
+                        readResult2.pixelSize.width(), readResult2.pixelSize.height(),
+                        QImage::Format_RGBA8888_Premultiplied); // non-owning, no copy needed because readResult outlives result
+    };
+    QRhiResourceUpdateBatch *readbackBatch = rhi->nextResourceUpdateBatch();
+    readbackBatch->readBackTexture({ texture.data() }, &readResult1);
+    readbackBatch->readBackTexture({ texture2.data() }, &readResult2);
+    cb->endPass(readbackBatch);
+
+    rhi->endOffscreenFrame();
+
+    QCOMPARE(result1.size(), texture->pixelSize());
+    QCOMPARE(result2.size(), texture2->pixelSize());
+
+    if (impl == QRhi::Null)
+        return;
+
+    // Now we have a red triangle in result1 and an 'electric blue' triangle in the result2
+    // which are complementary colors. If we sum them up they should return all white.
+
+    int y = result1.size().height() / 2;
+    const quint32 *p1 = reinterpret_cast<const quint32 *>(result1.constScanLine(y));
+    const quint32 *p2 = reinterpret_cast<const quint32 *>(result2.constScanLine(y));
+
+    const int width = result1.size().width();
+    for (int i = 0; i < width; i++) {
+        QRgb c1(*p1++);
+        QRgb c2(*p2++);
+        const bool c1white = (qAbs(qRed(c1) - 255) <= 1 && qAbs(qGreen(c1) - 255) <= 1 && qAbs(qBlue(c1) - 255) <= 1);
+        const bool c2white = (qAbs(qRed(c2) - 255) <= 1 && qAbs(qGreen(c2) - 255) <= 1 && qAbs(qBlue(c2) - 255) <= 1);
+
+        // skip if both pixels are white
+        if (c1white && c2white)
+            continue;
+
+        // remove the chance that either color accounts
+        // for all the value in the color sum
+        if (c1white || c2white)
+            QFAIL("If both colors are not white then neither can be white.");
+
+        if (qAbs((qRed(c1) + qRed(c2) - 255)) > 1
+            || qAbs((qGreen(c1) + qGreen(c2) - 255)) > 1
+            || qAbs((qBlue(c1) + qBlue(c2) - 255)) > 1) {
+            QFAIL("Colors in resulting images are not complementary");
+        }
     }
 }
 
@@ -4992,6 +5880,81 @@ void tst_QRhi::textureWithSampleCount()
     }
 }
 
+void tst_QRhi::textureFormats_data()
+{
+    static constexpr QRhiTexture::Format textureFormats[] = {
+        QRhiTexture::RGBA8,
+        QRhiTexture::BGRA8,
+        QRhiTexture::R8,
+        QRhiTexture::RG8,
+        QRhiTexture::R16,
+        QRhiTexture::RG16,
+        QRhiTexture::RED_OR_ALPHA8,
+        QRhiTexture::RGBA16F,
+        QRhiTexture::RGBA32F,
+        QRhiTexture::R16F,
+        QRhiTexture::R32F,
+        QRhiTexture::RGB10A2,
+        QRhiTexture::R8SI,
+        QRhiTexture::R32SI,
+        QRhiTexture::RG32SI,
+        QRhiTexture::RGBA32SI,
+        QRhiTexture::R8UI,
+        QRhiTexture::R32UI,
+        QRhiTexture::RG32UI,
+        QRhiTexture::RGBA32UI,
+        QRhiTexture::D16,
+        QRhiTexture::D24,
+        QRhiTexture::D24S8,
+        QRhiTexture::D32F,
+        QRhiTexture::D32FS8,
+        QRhiTexture::BC1,
+        QRhiTexture::BC2,
+        QRhiTexture::BC3,
+        QRhiTexture::BC4,
+        QRhiTexture::BC5,
+        QRhiTexture::BC6H,
+        QRhiTexture::BC7,
+        QRhiTexture::ETC2_RGB8,
+        QRhiTexture::ETC2_RGB8A1,
+        QRhiTexture::ETC2_RGBA8,
+        QRhiTexture::ASTC_4x4,
+        QRhiTexture::ASTC_5x4,
+        QRhiTexture::ASTC_5x5,
+        QRhiTexture::ASTC_6x5,
+        QRhiTexture::ASTC_6x6,
+        QRhiTexture::ASTC_8x5,
+        QRhiTexture::ASTC_8x6,
+        QRhiTexture::ASTC_8x8,
+        QRhiTexture::ASTC_10x5,
+        QRhiTexture::ASTC_10x6,
+        QRhiTexture::ASTC_10x8,
+        QRhiTexture::ASTC_10x10,
+        QRhiTexture::ASTC_12x10,
+        QRhiTexture::ASTC_12x12,
+    };
+
+    rhiTestDataWithParam("textureFormat", QSpan(textureFormats), [](const QRhiTexture::Format format) {
+        return QString::number(format);
+    });
+}
+
+void tst_QRhi::textureFormats()
+{
+    QFETCH(QRhi::Implementation, impl);
+    QFETCH(QRhiInitParams *, initParams);
+    QFETCH(QRhiTexture::Format, textureFormat);
+
+    std::unique_ptr<QRhi> rhi(QRhi::create(impl, initParams, QRhi::Flags(), nullptr));
+    if (!rhi)
+        QSKIP("QRhi could not be created, skipping testing texture formats");
+
+    if (!rhi->isTextureFormatSupported(textureFormat))
+        QSKIP("Texture format not supported on this backend");
+
+    std::unique_ptr<QRhiTexture> tex(rhi->newTexture(textureFormat, QSize(512, 512), 1));
+    QVERIFY(tex->create());
+}
 
 void tst_QRhi::textureImportOpenGL()
 {
@@ -5109,11 +6072,22 @@ void tst_QRhi::threeDimTexture()
     QFETCH(QRhiInitParams *, initParams);
 
     QScopedPointer<QRhi> rhi(QRhi::create(impl, initParams));
+
+#ifdef Q_OS_ANDROID
+    if (QNativeInterface::QAndroidApplication::sdkVersion() == 36)
+        QSKIP("Fails and crashes on Android 16 (QTBUG-140189)");
+#endif
+
     if (!rhi)
         QSKIP("QRhi could not be created, skipping testing 3D textures");
 
     if (!rhi->isFeatureSupported(QRhi::ThreeDimensionalTextures))
         QSKIP("Skipping testing 3D textures because they are reported as unsupported");
+
+    if (isAndroidOpenGLSwiftShader(impl, rhi.get())) {
+        QSKIP("SwiftShader software acceleration is used which does not support this OpenGLES "
+            "feature. See QTBUG-132934");
+    }
 
     const int WIDTH = 512;
     const int HEIGHT = 256;
@@ -5792,6 +6766,11 @@ void tst_QRhi::leakedResourceDestroy()
     QFETCH(QRhi::Implementation, impl);
     QFETCH(QRhiInitParams *, initParams);
 
+#ifdef Q_OS_ANDROID
+    if ((QNativeInterface::QAndroidApplication::sdkVersion() == 36) && (impl == QRhi::Vulkan))
+        QSKIP("Fails and crashes on Android 16 (QTBUG-140189)");
+#endif
+
     QScopedPointer<QRhi> rhi(QRhi::create(impl, initParams));
     if (!rhi)
         QSKIP("QRhi could not be created, skipping");
@@ -5870,6 +6849,11 @@ void tst_QRhi::renderToFloatTexture()
     if (!rhi->isTextureFormatSupported(QRhiTexture::RGBA16F))
         QSKIP("RGBA16F is not supported, skipping test");
 
+    if (isAndroidOpenGLSwiftShader(impl, rhi.get())) {
+        QSKIP("SwiftShader software acceleration is used which does not support this OpenGLES "
+              "feature. See QTBUG-132934");
+    }
+
     const QSize outputSize(1920, 1080);
     QScopedPointer<QRhiTexture> texture(rhi->newTexture(QRhiTexture::RGBA16F, outputSize, 1,
                                                         QRhiTexture::RenderTarget | QRhiTexture::UsedAsTransferSource));
@@ -5921,7 +6905,7 @@ void tst_QRhi::renderToFloatTexture()
         return;
 
     if (rhi->isYUpInFramebuffer() != rhi->isYUpInNDC())
-        result = std::move(result).mirrored();
+        result.flip();
 
     // Now we have a red rectangle on blue background.
     const int y = 100;
@@ -5958,6 +6942,11 @@ void tst_QRhi::renderToRgb10Texture()
 
     if (!rhi->isTextureFormatSupported(QRhiTexture::RGB10A2))
         QSKIP("RGB10A2 is not supported, skipping test");
+
+    if (isAndroidOpenGLSwiftShader(impl, rhi.get())) {
+        QSKIP("SwiftShader software acceleration is used which does not support this OpenGLES "
+              "feature. See QTBUG-132934");
+    }
 
     const QSize outputSize(1920, 1080);
     QScopedPointer<QRhiTexture> texture(rhi->newTexture(QRhiTexture::RGB10A2, outputSize, 1,
@@ -6010,7 +6999,7 @@ void tst_QRhi::renderToRgb10Texture()
         return;
 
     if (rhi->isYUpInFramebuffer() != rhi->isYUpInNDC())
-        result = std::move(result).mirrored();
+        result.flip();
 
     // Now we have a red rectangle on blue background.
     const int y = 100;
@@ -6152,7 +7141,7 @@ void tst_QRhi::tessellation()
     rhi->endOffscreenFrame();
 
     if (rhi->isYUpInFramebuffer()) // we used clipSpaceCorrMatrix so this is different from many other tests
-        result = std::move(result).mirrored();
+        result.flip();
 
     QCOMPARE(result.size(), rt->pixelSize());
 
@@ -6268,10 +7257,11 @@ void tst_QRhi::tessellationInterfaceBlocks()
     u->updateDynamicBuffer(ubuf.data(), 0, 64, mvp.constData());
 
     QScopedPointer<QRhiBuffer> buffer(
-            rhi->newBuffer(QRhiBuffer::Static, QRhiBuffer::UsageFlag::StorageBuffer, 1024));
+            rhi->newBuffer(QRhiBuffer::Static, QRhiBuffer::UsageFlag::StorageBuffer, 2048));
     QVERIFY(buffer->create());
 
-    u->uploadStaticBuffer(buffer.data(), 0, 1024, QByteArray(1024, 0).constData());
+    // 2048 is a large buffer for RUB
+    u->uploadStaticBuffer(buffer.data(), QByteArray(2048, 0));
 
     QScopedPointer<QRhiShaderResourceBindings> srb(rhi->newShaderResourceBindings());
     srb->setBindings(
@@ -6342,7 +7332,7 @@ void tst_QRhi::tessellationInterfaceBlocks()
 
     if (rhi->isYUpInFramebuffer()) // we used clipSpaceCorrMatrix so this is different from many
                                    // other tests
-        result = std::move(result).mirrored();
+        result.flip();
 
     QCOMPARE(result.size(), rt->pixelSize());
 
@@ -6584,7 +7574,7 @@ void tst_QRhi::storageBuffer()
         reinterpret_cast<float *>(&toGpuData.data()[toGpuMembers["_vec4"].offset])[2] = 9.0f;
         reinterpret_cast<float *>(&toGpuData.data()[toGpuMembers["_vec4"].offset])[3] = 10.0f;
 
-        u->uploadStaticBuffer(toGpuBuffer.data(), 0, toGpuData.size(), toGpuData.constData());
+        u->uploadStaticBuffer(toGpuBuffer.data(), std::move(toGpuData));
         u->uploadStaticBuffer(fromGpuBuffer.data(), 0, blocks["fromGpu"].knownSize, QByteArray(blocks["fromGpu"].knownSize, 0).constData());
 
         QScopedPointer<QRhiShaderResourceBindings> srb(rhi->newShaderResourceBindings());
@@ -6650,6 +7640,12 @@ void tst_QRhi::storageBuffer()
 
     QFETCH(QRhi::Implementation, impl);
     QFETCH(QRhiInitParams *, initParams);
+
+#ifdef Q_OS_ANDROID
+    if (QNativeInterface::QAndroidApplication::sdkVersion() == 36)
+        QSKIP("pipeline->create()) Fails on Android 16 (QTBUG-140189)");
+#endif
+
 
     // we can't test with Null as there is no compute
     if (impl == QRhi::Null)
@@ -6774,6 +7770,9 @@ void tst_QRhi::storageBufferRuntimeSizeGraphics()
     QScopedPointer<QRhi> rhi(QRhi::create(impl, initParams, QRhi::Flags(), nullptr));
     if (!rhi)
         QSKIP("QRhi could not be created, skipping testing rendering");
+
+    if (!rhi->isFeatureSupported(QRhi::Compute)) // also indicates storage buffers and image load/store
+        QSKIP("Storage buffers are not supported with this graphics API, skipping test");
 
     if (!rhi->isFeatureSupported(QRhi::Tessellation)) {
         // From a Vulkan or Metal implementation we expect tessellation to work,

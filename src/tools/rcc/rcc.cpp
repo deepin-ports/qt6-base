@@ -272,8 +272,8 @@ qint64 RCCFileInfo::writeDataBlob(RCCResourceLibrary &lib, qint64 offset,
                                           CONSTANT_ZSTDCOMPRESSLEVEL_STORE);
                 }
                 if (ZSTD_isError(n)) {
-                    QString msg = QString::fromLatin1("%1: error: compression with zstd failed: %2\n")
-                            .arg(m_name, QString::fromUtf8(ZSTD_getErrorName(n)));
+                    QString msg = "%1: error: compression with zstd failed: %2\n"_L1
+                            .arg(m_name, ZSTD_getErrorName(n));
                     lib.m_errorDevice->write(msg.toUtf8());
                 } else if (lib.verbose()) {
                     QString msg = QString::fromLatin1("%1: note: compressed using zstd (%2 -> %3)\n")
@@ -307,7 +307,7 @@ qint64 RCCFileInfo::writeDataBlob(RCCResourceLibrary &lib, qint64 offset,
                             .arg(m_name).arg(data.size()).arg(compressed.size());
                     lib.m_errorDevice->write(msg.toUtf8());
                 }
-                data = compressed;
+                data = std::move(compressed);
                 lib.m_overallFlags |= Compressed;
                 m_flags |= Compressed;
             } else if (lib.verbose()) {
@@ -817,7 +817,7 @@ bool RCCResourceLibrary::readFiles(bool listMode, QIODevice &errorDevice)
             m_errorDevice->write(msg.toUtf8());
         }
 
-        if (!interpretResourceFile(&fileIn, fname, pwd, listMode))
+        if (!interpretResourceFile(&fileIn, fname, std::move(pwd), listMode))
             return false;
     }
     return true;

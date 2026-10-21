@@ -1,5 +1,6 @@
 // Copyright (C) 2021 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:data-parser
 #ifndef QBYTEARRAYVIEW_H
 #define QBYTEARRAYVIEW_H
 
@@ -18,12 +19,11 @@ QT_BEGIN_NAMESPACE
 namespace QtPrivate {
 
 template <typename Byte>
-struct IsCompatibleByteTypeHelper
-    : std::integral_constant<bool,
-                             std::is_same_v<Byte, char> ||
-                             std::is_same_v<Byte, uchar> ||
-                             std::is_same_v<Byte, signed char> ||
-                             std::is_same_v<Byte, std::byte>> {};
+struct IsCompatibleByteTypeHelper : std::false_type {};
+template <> struct IsCompatibleByteTypeHelper<char> : std::true_type {};
+template <> struct IsCompatibleByteTypeHelper<signed char> : std::true_type {};
+template <> struct IsCompatibleByteTypeHelper<unsigned char> : std::true_type {};
+template <> struct IsCompatibleByteTypeHelper<std::byte> : std::true_type {};
 
 template <typename Byte>
 struct IsCompatibleByteType
@@ -138,15 +138,19 @@ private:
     { return data; }
 
 public:
-    constexpr QByteArrayView() noexcept
-        : m_size(0), m_data(nullptr) {}
+    constexpr QByteArrayView() = default;
     constexpr QByteArrayView(std::nullptr_t) noexcept
         : QByteArrayView() {}
 
     template <typename Byte, if_compatible_byte<Byte> = true>
     constexpr QByteArrayView(const Byte *data, qsizetype len)
+#if QT_VERSION >= QT_VERSION_CHECK(7, 0, 0) || defined(QT_BOOTSTRAPPED)
+        : m_data(castHelper(data)),
+          m_size((Q_ASSERT(len >= 0), Q_ASSERT(data || !len), len)) {}
+#else
         : m_size((Q_ASSERT(len >= 0), Q_ASSERT(data || !len), len)),
           m_data(castHelper(data)) {}
+#endif
 
     template <typename Byte, if_compatible_byte<Byte> = true>
     constexpr QByteArrayView(const Byte *first, const Byte *last)
@@ -176,6 +180,10 @@ public:
     template <size_t Size>
     constexpr QByteArrayView(const char (&data)[Size]) noexcept
         : QByteArrayView(data, lengthHelperCharArray(data, Size)) {}
+
+    template <typename Byte, if_compatible_byte<Byte> = true>
+    constexpr QByteArrayView(const Byte (&data)[]) noexcept
+        : QByteArrayView(&*data) {} // decay to pointer
 
 #ifdef Q_QDOC
     template <typename Byte, size_t Size>
@@ -363,13 +371,6 @@ private:
     }
     Q_DECLARE_STRONGLY_ORDERED(QByteArrayView)
 
-    friend bool comparesEqual(const QByteArrayView &lhs, const char *rhs) noexcept
-    { return comparesEqual(lhs, QByteArrayView(rhs)); }
-    friend Qt::strong_ordering
-    compareThreeWay(const QByteArrayView &lhs, const char *rhs) noexcept
-    { return compareThreeWay(lhs, QByteArrayView(rhs)); }
-    Q_DECLARE_STRONGLY_ORDERED(QByteArrayView, const char *)
-
     // defined in qstring.cpp
     friend Q_CORE_EXPORT bool
     comparesEqual(const QByteArrayView &lhs, const QChar &rhs) noexcept;
@@ -384,8 +385,13 @@ private:
     Q_DECLARE_STRONGLY_ORDERED(QByteArrayView, char16_t, QT_ASCII_CAST_WARN)
 #endif // !defined(QT_NO_CAST_FROM_ASCII) && !defined(QT_RESTRICTED_CAST_FROM_ASCII)
 
-    qsizetype m_size;
-    const storage_type *m_data;
+#if QT_VERSION >= QT_VERSION_CHECK(7, 0, 0) || defined(QT_BOOTSTRAPPED)
+    const storage_type *m_data = nullptr;
+    qsizetype m_size = 0;
+#else
+    qsizetype m_size = 0;
+    const storage_type *m_data = nullptr;
+#endif
 };
 Q_DECLARE_TYPEINFO(QByteArrayView, Q_PRIMITIVE_TYPE);
 
@@ -409,8 +415,10 @@ inline quint16 qChecksum(const char *s, qsizetype len,
 
 qsizetype QtPrivate::findByteArray(QByteArrayView haystack, qsizetype from, char needle) noexcept
 {
+    if (from < -haystack.size()) // from < 0 && abs(from) > haystack.size(), avoiding overflow
+        return -1;
     if (from < 0)
-        from = qMax(from + haystack.size(), qsizetype(0));
+        from = from + haystack.size();
     if (from < haystack.size()) {
         const char *const b = haystack.data();
         if (const auto n = static_cast<const char *>(

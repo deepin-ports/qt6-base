@@ -18,6 +18,7 @@
 #include <QGraphicsProxyWidget>
 #include <QGraphicsView>
 #include <QWindow>
+#include <QRhiWidget>
 #include <private/qguiapplication_p.h>
 #include <qpa/qplatformtheme.h>
 #include <qpa/qplatformtheme_p.h>
@@ -52,6 +53,7 @@ private slots:
     void toolDialogPosition();
     void deleteMainDefault();
     void deleteInExec();
+    void execBlocksEvenIfRecreated();
 #if QT_CONFIG(sizegrip)
     void showSizeGrip();
 #endif
@@ -66,6 +68,8 @@ private slots:
     void deleteOnDone();
     void quitOnDone();
     void focusWidgetAfterOpen();
+
+    void closeParentOfVisibleDialog();
 };
 
 // Testing get/set functions
@@ -372,6 +376,38 @@ void tst_QDialog::deleteInExec()
     QCOMPARE(dialog->exec(), int(QDialog::Rejected));
 }
 
+
+class RecreatedDialog : public QDialog {
+    int tId = -1;
+public:
+    bool didBlock = false;
+
+    void showEvent(QShowEvent* ) override
+    {
+        QTimer::singleShot(0, [this] {
+            auto rhiWidget = new QRhiWidget();
+            rhiWidget->setParent(this);
+        });
+        tId = startTimer(300);
+    }
+
+    void timerEvent(QTimerEvent *event) override
+    {
+        if (tId == event->timerId()) {
+            killTimer(tId);
+            didBlock = true;
+            accept();
+        }
+    }
+};
+
+void tst_QDialog::execBlocksEvenIfRecreated()
+{
+    RecreatedDialog dialog;
+    QCOMPARE(dialog.exec(), QDialog::Accepted);
+    QVERIFY(dialog.didBlock);
+}
+
 #if QT_CONFIG(sizegrip)
 
 void tst_QDialog::showSizeGrip()
@@ -566,6 +602,10 @@ void tst_QDialog::dialogInGraphicsView()
 // bar would offset the dialog position when shown next time.
 void tst_QDialog::keepPositionOnClose()
 {
+#ifdef Q_OS_LINUX
+    if (QString(QGuiApplication::platformName().toLower()) == QStringLiteral("xcb"))
+        QSKIP("Test has been written for Windows and is flaky on Linux xcb.");
+#endif
     QDialog dialog;
     dialog.setWindowTitle(QTest::currentTestFunction());
     const QRect availableGeometry = QGuiApplication::primaryScreen()->availableGeometry();
@@ -766,6 +806,24 @@ void tst_QDialog::focusWidgetAfterOpen()
 
     dialog.open();
     QCOMPARE(dialog.focusWidget(), static_cast<QWidget *>(pb2));
+}
+
+void tst_QDialog::closeParentOfVisibleDialog()
+{
+    QWidget widget;
+    widget.show();
+
+    // On macOS, this dialog becomes a sheet and triggered an assert when
+    // the widget it lived in was already gone by the time the sheet
+    // got closed. QTBUG-128302
+    QDialog dialog(&widget);
+    dialog.open();
+
+    QTimer::singleShot(0, &widget, [&]{
+        widget.close();
+    });
+
+    QTRY_VERIFY(!widget.isVisible());
 }
 
 QTEST_MAIN(tst_QDialog)

@@ -16,8 +16,13 @@ QOpenGLTextureHelper::QOpenGLTextureHelper(QOpenGLContext *context)
     // However, disable it on some systems where DSA is known to be unreliable.
     bool allowDSA = true;
     const char *renderer = reinterpret_cast<const char *>(context->functions()->glGetString(GL_RENDERER));
+    const char *version =
+            reinterpret_cast<const char *>(context->functions()->glGetString(GL_VERSION));
     // QTBUG-40653, QTBUG-44988
     if (renderer && strstr(renderer, "AMD Radeon HD"))
+        allowDSA = false;
+    // QTBUG-147866: EXT_direct_state_access texture storage is broken on Mesa
+    if (version && strstr(version, "Mesa"))
         allowDSA = false;
 
     if (allowDSA && !context->isOpenGLES()
@@ -153,7 +158,7 @@ QOpenGLTextureHelper::QOpenGLTextureHelper(QOpenGLContext *context)
     TextureView = 0;
 
     // OpenGL ES 3.1+ has TexStorage2DMultisample
-    if (ctx->format().version() >= qMakePair(3, 1)) {
+    if (ctx->format().version() >= std::pair(3, 1)) {
         QOpenGLExtraFunctionsPrivate *extra = static_cast<QOpenGLExtensions *>(context->extraFunctions())->d();
         TexStorage2DMultisample = extra->f.TexStorage2DMultisample;
     }

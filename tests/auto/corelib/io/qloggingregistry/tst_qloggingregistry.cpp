@@ -186,6 +186,12 @@ private slots:
 
         Q_ASSERT(!qApp); // Rules should not require an app to resolve
 
+        static bool calledOnce = false;
+        if (calledOnce)
+            QSKIP("QLoggingRegistry_environment can only run once");
+
+        calledOnce = true;
+
         qputenv("QT_LOGGING_RULES", "qt.foo.bar=true");
         QLoggingCategory qtEnabledByLoggingRule("qt.foo.bar");
         QCOMPARE(qtEnabledByLoggingRule.isDebugEnabled(), true);
@@ -193,6 +199,7 @@ private slots:
         QCOMPARE(qtDisabledByDefault.isDebugEnabled(), false);
 
         QLoggingRegistry &registry = *QLoggingRegistry::instance();
+        registry.initializeRules();
         QCOMPARE(registry.ruleSets[QLoggingRegistry::ApiRules].size(), 0);
         QCOMPARE(registry.ruleSets[QLoggingRegistry::ConfigRules].size(), 0);
         QCOMPARE(registry.ruleSets[QLoggingRegistry::EnvironmentRules].size(), 1);
@@ -232,12 +239,14 @@ private slots:
         out << "Digia.*=false\n";
         file.close();
 
-        QLoggingRegistry registry;
+        QLoggingRegistry &registry = *QLoggingRegistry::instance();
+        auto cleanup = qScopeGuard([&] {
+            file.remove();
+            registry.initializeRules(); // reset rules
+        });
+
         registry.initializeRules();
         QCOMPARE(registry.ruleSets[QLoggingRegistry::ConfigRules].size(), 1);
-
-        // remove file again
-        QVERIFY(file.remove());
     }
 
     void QLoggingRegistry_rulePriorities()

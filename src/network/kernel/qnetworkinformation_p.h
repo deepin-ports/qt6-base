@@ -1,5 +1,6 @@
 // Copyright (C) 2021 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #ifndef QNETWORKINFORMATION_P_H
 #define QNETWORKINFORMATION_P_H
@@ -32,9 +33,9 @@ class Q_NETWORK_EXPORT QNetworkInformationBackend : public QObject
     using TransportMedium = QNetworkInformation::TransportMedium;
 
 public:
-    static inline const char16_t PluginNames[4][22] = {
+    static inline const char16_t PluginNames[4][24] = {
         { u"networklistmanager" },
-        { u"scnetworkreachability" },
+        { u"applenetworkinformation" },
         { u"android" },
         { u"networkmanager" },
     };

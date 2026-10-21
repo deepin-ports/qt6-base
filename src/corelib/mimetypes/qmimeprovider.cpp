@@ -2,6 +2,7 @@
 // Copyright (C) 2018 Klaralvdalens Datakonsult AB, a KDAB Group company, info@kdab.com, author David Faure <david.faure@kdab.com>
 // Copyright (C) 2019 Intel Corporation.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:data-parser
 
 #include "qmimeprovider_p.h"
 
@@ -275,6 +276,8 @@ bool QMimeBinaryProvider::matchSuffixTree(QMimeGlobMatchResult &result,
                                           qsizetype charPos, bool caseSensitiveCheck)
 {
     QChar fileChar = fileName[charPos];
+    if (fileChar.isNull())
+        return false;
     int min = 0;
     int max = numEntries - 1;
     while (min <= max) {
@@ -374,7 +377,6 @@ void QMimeBinaryProvider::findByMagic(const QByteArray &data, QMimeMagicResult &
 
 void QMimeBinaryProvider::addParents(const QString &mime, QStringList &result)
 {
-    const QByteArray mimeStr = mime.toLatin1();
     const int parentListOffset = m_cacheFile->getUint32(PosParentListOffset);
     const int numEntries = m_cacheFile->getUint32(parentListOffset);
 
@@ -385,7 +387,7 @@ void QMimeBinaryProvider::addParents(const QString &mime, QStringList &result)
         const int off = parentListOffset + 4 + 8 * medium;
         const int mimeOffset = m_cacheFile->getUint32(off);
         const char *aMime = m_cacheFile->getCharStar(mimeOffset);
-        const int cmp = qstrcmp(aMime, mimeStr);
+        const int cmp = QLatin1StringView(aMime).compare(mime);
         if (cmp < 0) {
             begin = medium + 1;
         } else if (cmp > 0) {
@@ -406,7 +408,6 @@ void QMimeBinaryProvider::addParents(const QString &mime, QStringList &result)
 
 QString QMimeBinaryProvider::resolveAlias(const QString &name)
 {
-    const QByteArray input = name.toLatin1();
     const int aliasListOffset = m_cacheFile->getUint32(PosAliasListOffset);
     const int numEntries = m_cacheFile->getUint32(aliasListOffset);
     int begin = 0;
@@ -416,7 +417,7 @@ QString QMimeBinaryProvider::resolveAlias(const QString &name)
         const int off = aliasListOffset + 4 + 8 * medium;
         const int aliasOffset = m_cacheFile->getUint32(off);
         const char *alias = m_cacheFile->getCharStar(aliasOffset);
-        const int cmp = qstrcmp(alias, input);
+        const int cmp = QLatin1StringView(alias).compare(name);
         if (cmp < 0) {
             begin = medium + 1;
         } else if (cmp > 0) {
@@ -432,7 +433,6 @@ QString QMimeBinaryProvider::resolveAlias(const QString &name)
 
 void QMimeBinaryProvider::addAliases(const QString &name, QStringList &result)
 {
-    const QByteArray input = name.toLatin1();
     const int aliasListOffset = m_cacheFile->getUint32(PosAliasListOffset);
     const int numEntries = m_cacheFile->getUint32(aliasListOffset);
     for (int pos = 0; pos < numEntries; ++pos) {
@@ -440,7 +440,7 @@ void QMimeBinaryProvider::addAliases(const QString &name, QStringList &result)
         const int mimeOffset = m_cacheFile->getUint32(off + 4);
         const char *mimeType = m_cacheFile->getCharStar(mimeOffset);
 
-        if (input == mimeType) {
+        if (name == QLatin1StringView(mimeType)) {
             const int aliasOffset = m_cacheFile->getUint32(off);
             const char *alias = m_cacheFile->getCharStar(aliasOffset);
             const QString strAlias = QString::fromLatin1(alias);
@@ -458,8 +458,8 @@ void QMimeBinaryProvider::loadMimeTypeList()
         // So we have to parse the plain-text files called "types".
         QFile file(m_directory + QStringView(u"/types"));
         if (file.open(QIODevice::ReadOnly)) {
-            while (!file.atEnd()) {
-                const QByteArray line = file.readLine();
+            QByteArray line;
+            while (file.readLineInto(&line)) {
                 auto lineView = QByteArrayView(line);
                 if (lineView.endsWith('\n'))
                     lineView.chop(1);
@@ -512,8 +512,8 @@ QMimeBinaryProvider::MimeTypeExtraMap::const_iterator
 QMimeBinaryProvider::loadMimeTypeExtra(const QString &mimeName)
 {
 #if QT_CONFIG(xmlstreamreader)
-    auto it = m_mimetypeExtra.find(mimeName);
-    if (it == m_mimetypeExtra.cend()) {
+    auto [it, insertionOccurred] = m_mimetypeExtra.try_emplace(mimeName);
+    if (insertionOccurred) {
         // load comment and globPatterns
 
         // shared-mime-info since 1.3 lowercases the xml files
@@ -523,9 +523,8 @@ QMimeBinaryProvider::loadMimeTypeExtra(const QString &mimeName)
 
         QFile qfile(mimeFile);
         if (!qfile.open(QFile::ReadOnly))
-            return m_mimetypeExtra.cend();
+            return it;
 
-        it = m_mimetypeExtra.try_emplace(mimeName).first;
         MimeTypeExtra &extra = it->second;
         QString mainPattern;
 
@@ -583,7 +582,7 @@ QMimeBinaryProvider::loadMimeTypeExtra(const QString &mimeName)
 
 // Binary search in the icons or generic-icons list
 QLatin1StringView QMimeBinaryProvider::iconForMime(CacheFile *cacheFile, int posListOffset,
-                                                   const QByteArray &inputMime)
+                                                   QStringView inputMime)
 {
     const int iconsListOffset = cacheFile->getUint32(posListOffset);
     const int numIcons = cacheFile->getUint32(iconsListOffset);
@@ -594,7 +593,7 @@ QLatin1StringView QMimeBinaryProvider::iconForMime(CacheFile *cacheFile, int pos
         const int off = iconsListOffset + 4 + 8 * medium;
         const int mimeOffset = cacheFile->getUint32(off);
         const char *mime = cacheFile->getCharStar(mimeOffset);
-        const int cmp = qstrcmp(mime, inputMime);
+        const int cmp = QLatin1StringView(mime).compare(inputMime);
         if (cmp < 0)
             begin = medium + 1;
         else if (cmp > 0)
@@ -609,14 +608,12 @@ QLatin1StringView QMimeBinaryProvider::iconForMime(CacheFile *cacheFile, int pos
 
 QString QMimeBinaryProvider::icon(const QString &name)
 {
-    const QByteArray inputMime = name.toLatin1();
-    return iconForMime(m_cacheFile.get(), PosIconsListOffset, inputMime);
+    return iconForMime(m_cacheFile.get(), PosIconsListOffset, name);
 }
 
 QString QMimeBinaryProvider::genericIcon(const QString &name)
 {
-    const QByteArray inputMime = name.toLatin1();
-    return iconForMime(m_cacheFile.get(), PosGenericIconsListOffset, inputMime);
+    return iconForMime(m_cacheFile.get(), PosGenericIconsListOffset, name);
 }
 
 ////
@@ -717,10 +714,24 @@ void QMimeXMLProvider::findByMagic(const QByteArray &data, QMimeMagicResult &res
     for (const QMimeMagicRuleMatcher &matcher : std::as_const(m_magicMatchers)) {
         if (matcher.matches(data)) {
             const int priority = matcher.priority();
-            if (priority > result.accuracy) {
-                result.accuracy = priority;
-                result.candidate = matcher.mimetype();
+            if (priority < result.accuracy)
+                continue;
+            if (priority == result.accuracy) {
+                if (m_db->inherits(result.candidate, matcher.mimetype()))
+                    continue;
+
+                if (!m_db->inherits(matcher.mimetype(), result.candidate)) {
+                    // Two or more magic rules matching, both with the same priority but not
+                    // connected with one another should not happen:
+                    qWarning("QMimeXMLProvider: MimeType is ambiguous between %ls and %ls",
+                             qUtf16Printable(result.candidate),
+                             qUtf16Printable(matcher.mimetype()));
+                    continue;
+                }
             }
+
+            result.accuracy = priority;
+            result.candidate = matcher.mimetype();
         }
     }
 }
@@ -729,11 +740,9 @@ void QMimeXMLProvider::ensureLoaded()
 {
     QStringList allFiles;
     const QString packageDir = m_directory + QStringView(u"/packages");
-    QDir dir(packageDir);
-    const QStringList files = dir.entryList(QDir::Files | QDir::NoDotAndDotDot);
-    allFiles.reserve(files.size());
-    for (const QString &xmlFile : files)
-        allFiles.append(packageDir + u'/' + xmlFile);
+    for (const auto &entry : QDirListing(packageDir, QDirListing::IteratorFlag::FilesOnly
+                                         | QDirListing::IteratorFlag::ResolveSymlinks))
+        allFiles.emplace_back(packageDir + u'/' + entry.fileName());
 
     if (m_allFiles == allFiles)
         return;
@@ -824,7 +833,8 @@ void QMimeXMLProvider::addMimeType(const QMimeTypeXMLData &mt)
 
 void QMimeXMLProvider::addParents(const QString &mime, QStringList &result)
 {
-    for (const QString &parent : m_parents.value(mime)) {
+    const QStringList parents = m_parents.value(mime);
+    for (const QString &parent : parents) {
         if (!result.contains(parent))
             result.append(parent);
     }

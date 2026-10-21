@@ -1,6 +1,7 @@
 // Copyright (C) 2022 The Qt Company Ltd.
 // Copyright (C) 2016 Intel Corporation.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #include "qcoreevent.h"
 #include "qcoreevent_p.h"
@@ -230,6 +231,8 @@ Q_TRACE_POINT(qtcore, QEvent_dtor, QEvent *event, QEvent::Type type);
     \value WindowUnblocked                  The window is unblocked after a modal dialog exited.
     \value WinIdChange                      The window system identifier for this native widget has changed.
     \value ZOrderChange                     The widget's z-order has changed. This event is never sent to top level windows.
+    \value [since 6.9] SafeAreaMarginsChange
+                                            The window's safe area margins have changed.
 
     User events should have values between \c User and \c{MaxUser}:
 
@@ -327,7 +330,7 @@ QEvent::QEvent(Type type)
 
 QEvent::~QEvent()
 {
-    if (m_posted && QCoreApplication::instance())
+    if (m_posted && QCoreApplication::instanceExists())
         QCoreApplicationPrivate::removePostedEvent(this);
 }
 
@@ -520,7 +523,7 @@ int QEvent::registerEventType(int hint) noexcept
     timer is started with QObject::startTimer().
 
     The QChronoTimer class provides a high-level programming interface that
-    uses signals instead of events. It also provides single-shot timers.
+    uses signals instead of events.
 
     The event handler QObject::timerEvent() receives timer events.
 
@@ -564,6 +567,14 @@ Q_IMPL_EVENT_COMMON(QTimerEvent)
     Returns the Qt::TimerId of the timer associated with this event, which
     is the same identifier returned by QObject::startTimer() cast to
     Qt::TimerId.
+*/
+
+/*!
+    \fn QTimerEvent::matches(const QBasicTimer &timer) const
+    \since 6.9
+
+    Returns \c true if this timer event and \a timer have the same ID,
+    otherwise returns \c false.
 */
 
 /*!

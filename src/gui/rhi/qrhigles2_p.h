@@ -38,7 +38,7 @@ struct QGles2Buffer : public QRhiBuffer
     QRhiBuffer::NativeBuffer nativeBuffer() override;
     char *beginFullDynamicBufferUpdateForCurrentFrame() override;
     void endFullDynamicBufferUpdateForCurrentFrame() override;
-    void fullDynamicBufferUpdateForCurrentFrame(const void *data) override;
+    void fullDynamicBufferUpdateForCurrentFrame(const void *data, quint32 size) override;
 
     quint32 nonZeroSize = 0;
     GLuint buffer = 0;
@@ -128,6 +128,7 @@ struct QGles2Texture : public QRhiTexture
     bool specified = false;
     bool zeroInitialized = false;
     int mipLevelCount = 0;
+    int samples;
 
     enum Access {
         AccessNone,
@@ -279,6 +280,7 @@ struct QGles2GraphicsPipeline : public QRhiGraphicsPipeline
     QGles2UniformState uniformState[QGles2UniformState::MAX_TRACKED_LOCATION + 1];
     QRhiShaderResourceBindings *currentSrb = nullptr;
     uint currentSrbGeneration = 0;
+    uint lastUsedInFrameNo = 0;
     uint generation = 0;
     friend class QRhiGles2;
 };
@@ -296,6 +298,7 @@ struct QGles2ComputePipeline : public QRhiComputePipeline
     QGles2UniformState uniformState[QGles2UniformState::MAX_TRACKED_LOCATION + 1];
     QRhiShaderResourceBindings *currentSrb = nullptr;
     uint currentSrbGeneration = 0;
+    uint lastUsedInFrameNo = 0;
     uint generation = 0;
     friend class QRhiGles2;
 };
@@ -451,6 +454,8 @@ struct QGles2CommandBuffer : public QRhiCommandBuffer
             struct {
                 QRhiReadbackResult *result;
                 GLuint texture;
+                int x;
+                int y;
                 int w;
                 int h;
                 QRhiTexture::Format format;
@@ -542,6 +547,7 @@ struct QGles2CommandBuffer : public QRhiCommandBuffer
                 GLbitfield barriers;
             } barrier;
             struct {
+                GLuint fbo;
                 int attCount;
                 GLenum att[3];
             } invalidateFramebuffer;
@@ -575,8 +581,8 @@ struct QGles2CommandBuffer : public QRhiCommandBuffer
         bool cullFace;
         GLenum cullMode;
         GLenum frontFace;
-        bool blendEnabled;
-        struct ColorMask { bool r, g, b, a; } colorMask;
+        bool blendEnabled[16];
+        struct ColorMask { bool r, g, b, a; } colorMask[16];
         struct Blend {
             GLenum srcColor;
             GLenum dstColor;
@@ -584,9 +590,10 @@ struct QGles2CommandBuffer : public QRhiCommandBuffer
             GLenum dstAlpha;
             GLenum opColor;
             GLenum opAlpha;
-        } blend;
+        } blend[16];
         bool depthTest;
         bool depthWrite;
+        bool depthClamp;
         GLenum depthFunc;
         bool stencilTest;
         GLuint stencilReadMask;
@@ -615,7 +622,7 @@ struct QGles2CommandBuffer : public QRhiCommandBuffer
             Read = 0x01,
             Write = 0x02
         };
-        QHash<QRhiResource *, QPair<int, bool> > writtenResources;
+        QHash<QRhiResource *, std::pair<int, bool> > writtenResources;
         void reset() {
             writtenResources.clear();
         }
@@ -754,7 +761,6 @@ struct QGles2SwapChain : public QRhiSwapChain
     QGles2SwapChainRenderTarget rtLeft;
     QGles2SwapChainRenderTarget rtRight;
     QGles2CommandBuffer cb;
-    int frameCount = 0;
     QGles2SwapChainTimestamps timestamps;
     int currentTimestampPairIndex = 0;
 };
@@ -794,6 +800,8 @@ public:
     QRhiTextureRenderTarget *createTextureRenderTarget(const QRhiTextureRenderTargetDescription &desc,
                                                        QRhiTextureRenderTarget::Flags flags) override;
 
+    QRhiShadingRateMap *createShadingRateMap() override;
+
     QRhiSwapChain *createSwapChain() override;
     QRhi::FrameOpResult beginFrame(QRhiSwapChain *swapChain, QRhi::BeginFrameFlags flags) override;
     QRhi::FrameOpResult endFrame(QRhiSwapChain *swapChain, QRhi::EndFrameFlags flags) override;
@@ -828,6 +836,7 @@ public:
     void setScissor(QRhiCommandBuffer *cb, const QRhiScissor &scissor) override;
     void setBlendConstants(QRhiCommandBuffer *cb, const QColor &c) override;
     void setStencilRef(QRhiCommandBuffer *cb, quint32 refValue) override;
+    void setShadingRate(QRhiCommandBuffer *cb, const QSize &coarsePixelSize) override;
 
     void draw(QRhiCommandBuffer *cb, quint32 vertexCount,
               quint32 instanceCount, quint32 firstVertex, quint32 firstInstance) override;
@@ -853,6 +862,7 @@ public:
     double lastCompletedGpuTime(QRhiCommandBuffer *cb) override;
 
     QList<int> supportedSampleCounts() const override;
+    QList<QSize> supportedShadingRates(int sampleCount) const override;
     int ubufAlignment() const override;
     bool isYUpInFramebuffer() const override;
     bool isYUpInNDC() const override;
@@ -865,6 +875,7 @@ public:
     QRhiDriverInfo driverInfo() const override;
     QRhiStats statistics() override;
     bool makeThreadLocalNativeContextCurrent() override;
+    void setQueueSubmitParams(QRhiNativeHandles *params) override;
     void releaseCachedResources() override;
     bool isDeviceLost() const override;
 
@@ -961,6 +972,7 @@ public:
     void (QOPENGLF_APIENTRYP glObjectLabel)(GLenum, GLuint, GLsizei, const GLchar *) = nullptr;
     void (QOPENGLF_APIENTRYP glFramebufferTexture2DMultisampleEXT)(GLenum, GLenum, GLenum, GLuint, GLint, GLsizei) = nullptr;
     void (QOPENGLF_APIENTRYP glFramebufferTextureMultisampleMultiviewOVR)(GLenum, GLenum, GLuint, GLint, GLsizei, GLint, GLsizei) = nullptr;
+    void (QOPENGLF_APIENTRYP glRenderbufferStorageMultisampleEXT)(GLenum, GLsizei, GLenum, GLsizei, GLsizei) = nullptr;
     uint vao = 0;
     struct Caps {
         Caps()
@@ -987,6 +999,7 @@ public:
               bgraInternalFormat(false),
               r8Format(false),
               r16Format(false),
+              r32uiFormat(false),
               floatFormats(false),
               rgb10Formats(false),
               depthTexture(false),
@@ -1002,6 +1015,7 @@ public:
               baseVertex(false),
               compute(false),
               textureCompareMode(false),
+              depthClamp(false),
               properMapBuffer(false),
               nonBaseLevelFramebufferTexture(false),
               texelFetch(false),
@@ -1019,7 +1033,8 @@ public:
               objectLabel(false),
               glesMultisampleRenderToTexture(false),
               glesMultiviewMultisampleRenderToTexture(false),
-              unpackRowLength(false)
+              unpackRowLength(false),
+              perRenderTargetBlending(false)
         { }
         int ctxMajor;
         int ctxMinor;
@@ -1046,6 +1061,7 @@ public:
         uint bgraInternalFormat : 1;
         uint r8Format : 1;
         uint r16Format : 1;
+        uint r32uiFormat : 1;
         uint floatFormats : 1;
         uint rgb10Formats : 1;
         uint depthTexture : 1;
@@ -1061,6 +1077,7 @@ public:
         uint baseVertex : 1;
         uint compute : 1;
         uint textureCompareMode : 1;
+        uint depthClamp : 1;
         uint properMapBuffer : 1;
         uint nonBaseLevelFramebufferTexture : 1;
         uint texelFetch : 1;
@@ -1079,6 +1096,9 @@ public:
         uint glesMultisampleRenderToTexture : 1;
         uint glesMultiviewMultisampleRenderToTexture : 1;
         uint unpackRowLength : 1;
+        uint perRenderTargetBlending : 1;
+        uint sampleVariables : 1;
+        uint imageLoadStore : 1;
     } caps;
     QGles2SwapChain *currentSwapChain = nullptr;
     QSet<GLint> supportedCompressedFormats;
@@ -1086,6 +1106,7 @@ public:
     QRhiGles2NativeHandles nativeHandlesStruct;
     QRhiDriverInfo driverInfoStruct;
     mutable bool contextLost = false;
+    uint frameNo = 0;
 
     struct DeferredReleaseEntry {
         enum Type {

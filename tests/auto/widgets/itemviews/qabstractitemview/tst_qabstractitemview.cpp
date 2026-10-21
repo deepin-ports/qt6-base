@@ -32,6 +32,9 @@
 #include <private/qabstractitemview_p.h>
 #include <QtWidgets/private/qapplication_p.h>
 
+#include <vector>
+#include <memory>
+
 Q_DECLARE_METATYPE(Qt::ItemFlags);
 
 using namespace QTestPrivate;
@@ -153,6 +156,7 @@ private slots:
     void removeIndexWhileEditing();
     void focusNextOnHide();
     void shiftSelectionAfterModelSetCurrentIndex();
+    void QTBUG72333_isPersistentEditorOpen();
 
 private:
     static QAbstractItemView *viewFromString(const QByteArray &viewType, QWidget *parent = nullptr)
@@ -296,6 +300,10 @@ void tst_QAbstractItemView::getSetCheck()
     QCOMPARE(20, obj1->autoScrollMargin());
     obj1->setAutoScrollMargin(16);
     QCOMPARE(16, obj1->autoScrollMargin());
+
+    QCOMPARE(200U, obj1->updateThreshold());
+    obj1->setUpdateThreshold(4711);
+    QCOMPARE(4711U, obj1->updateThreshold());
 }
 
 void tst_QAbstractItemView::cleanup()
@@ -1625,6 +1633,7 @@ void tst_QAbstractItemView::testDelegateDestroyEditor()
 
 void tst_QAbstractItemView::testDelegateDestroyEditorChild()
 {
+    std::vector<std::unique_ptr<QTreeWidgetItem>> reaper;
     QTreeWidget tree;
     MyAbstractItemDelegate delegate;
     tree.setItemDelegate(&delegate);
@@ -1640,8 +1649,10 @@ void tst_QAbstractItemView::testDelegateDestroyEditorChild()
     tree.openPersistentEditor(levelTwo2);
     QCOMPARE(delegate.virtualCtorCallCount, 4);
     levelOne1->removeChild(levelTwo1);
+    reaper.emplace_back(levelTwo1);
     QCOMPARE(delegate.virtualDtorCallCount, 1);
     topLevel->removeChild(levelOne2);
+    reaper.emplace_back(levelOne2);
     QCOMPARE(delegate.virtualDtorCallCount, 3);
 }
 
@@ -1854,7 +1865,7 @@ void tst_QAbstractItemView::QTBUG31411_noSelection()
     moveCursorAway(&window);
 
     window.show();
-    QVERIFY(QTest::qWaitForWindowActive(&window));
+    QVERIFY(QTest::qWaitForWindowFocused(&window));
 
     qRegisterMetaType<QItemSelection>();
     QSignalSpy selectionChangeSpy(table->selectionModel(), &QItemSelectionModel::selectionChanged);
@@ -3272,7 +3283,10 @@ void tst_QAbstractItemView::inputMethodOpensEditor()
     tableWidget.setCurrentCell(editItem.y(), editItem.x());
     const QString orgText = tableWidget.currentItem()->text();
     const QModelIndex currentIndex = tableWidget.currentIndex();
-    QCOMPARE(tableWidget.inputMethodQuery(Qt::ImCursorRectangle), tableWidget.visualRect(currentIndex));
+
+    QRect currentVisualRect = tableWidget.visualRect(currentIndex);
+    QRect currentRect(tableWidget.viewport()->mapTo(&tableWidget, currentVisualRect.topLeft()), currentVisualRect.size());
+    QCOMPARE(tableWidget.inputMethodQuery(Qt::ImCursorRectangle).toRect(), currentRect);
 
     // simulate the start of input via a composing input method
     sendInputMethodEvent(preedit.left(1));
@@ -3285,7 +3299,10 @@ void tst_QAbstractItemView::inputMethodOpensEditor()
     // the item view delegates input method queries to the editor
     const QRect cursorRect = tableWidget.inputMethodQuery(Qt::ImCursorRectangle).toRect();
     QVERIFY(cursorRect.isValid());
-    QVERIFY(tableWidget.visualRect(currentIndex).intersects(cursorRect));
+
+    currentVisualRect = tableWidget.visualRect(currentIndex);
+    currentRect = QRect(tableWidget.viewport()->mapTo(&tableWidget, currentVisualRect.topLeft()), currentVisualRect.size());
+    QVERIFY(currentRect.intersects(cursorRect));
 
     // finish preediting, then commit or cancel the input
     sendInputMethodEvent(preedit);
@@ -3552,7 +3569,7 @@ void tst_QAbstractItemView::focusNextOnHide()
     widget.show();
     QVERIFY(QTest::qWaitForWindowExposed(&widget));
 
-    QVERIFY(table.hasFocus());
+    QTRY_VERIFY(table.hasFocus());
     QCOMPARE(table.currentIndex(), table.model()->index(0, 0));
     QTest::keyPress(&table, Qt::Key_Tab);
     QCOMPARE(table.currentIndex(), table.model()->index(0, 1));
@@ -3592,6 +3609,30 @@ void tst_QAbstractItemView::shiftSelectionAfterModelSetCurrentIndex()
     selection = view.selectionModel()->selection();
     QCOMPARE(selection.first().top(), 2);
     QCOMPARE(selection.first().bottom(), 2);
+}
+
+void tst_QAbstractItemView::QTBUG72333_isPersistentEditorOpen()
+{
+    QStandardItemModel model(1, 1);
+    model.setData(model.index(0, 0), QStringLiteral("Test"));
+
+    QTableView view;
+    view.setModel(&model);
+    view.show();
+
+    const QModelIndex index = model.index(0, 0);
+
+    view.edit(index);
+    QVERIFY(view.state() == QAbstractItemView::EditingState);
+    QVERIFY(!view.isPersistentEditorOpen(index));
+
+    view.closeEditor(view.indexWidget(index), QAbstractItemDelegate::RevertModelCache);
+
+    view.openPersistentEditor(index);
+    QVERIFY(view.isPersistentEditorOpen(index));
+
+    view.closePersistentEditor(index);
+    QVERIFY(!view.isPersistentEditorOpen(index));
 }
 
 QTEST_MAIN(tst_QAbstractItemView)

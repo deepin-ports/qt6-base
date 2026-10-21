@@ -1,3 +1,5 @@
-# QTBUG-127920
+# QTBUG-130742
+[taskQTBUG4497_reusePrinterOnDifferentFiles]
+vxworks
 [testPrintPreviewDialog]
-wayland ubuntu-24.04
+wayland

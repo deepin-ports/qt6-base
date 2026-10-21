@@ -1,10 +1,11 @@
-# SymbolsHelper-Confirmed: 6.8.0 amd64 arm64 i386 loong64 riscv64
+# SymbolsHelper-Confirmed: 6.9.1 amd64
 libQt6Xml.so.6 libqt6xml6 #MINVER#
-| libqt6xml6 #MINVER#, qt6-base-private-abi (= 6.8.0)
+| libqt6xml6 #MINVER#, qt6-base-private-abi (= 6.11.2)
 * Build-Depends-Package: qt6-base-dev
- NonQt@NonQt 6.8.0
+ NonQt@NonQt 6.7.2
  Qt_6@Qt_6 6.1.2
  (symver)Qt_6_PRIVATE_API 0 1
+ _Z13comparesEqualRK12QDomNodeListS1_@Qt_6 6.9.1
  _ZN10QDomEntityC1ERKS_@Qt_6 6.1.2
  _ZN10QDomEntityC1Ev@Qt_6 6.1.2
  _ZN10QDomEntityC2ERKS_@Qt_6 6.1.2
@@ -190,6 +191,7 @@ libQt6Xml.so.6 libqt6xml6 #MINVER#
  _ZNK12QDomDocument17elementsByTagNameERK7QString@Qt_6 6.1.2
  _ZNK12QDomDocument7doctypeEv@Qt_6 6.1.2
  _ZNK12QDomDocument8toStringEi@Qt_6 6.1.2
+ _ZNK12QDomNodeList14noexceptLengthEv@Qt_6 6.9.1
  _ZNK12QDomNodeList4itemEi@Qt_6 6.1.2
  _ZNK12QDomNodeList6lengthEv@Qt_6 6.1.2
  _ZNK12QDomNodeListeqERKS_@Qt_6 6.1.2

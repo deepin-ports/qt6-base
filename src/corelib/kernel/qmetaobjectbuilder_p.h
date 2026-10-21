@@ -1,5 +1,6 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #ifndef QMETAOBJECTBUILDER_P_H
 #define QMETAOBJECTBUILDER_P_H
@@ -145,7 +146,7 @@ private:
 class Q_CORE_EXPORT QMetaMethodBuilder
 {
 public:
-    QMetaMethodBuilder() : _mobj(nullptr), _index(0) {}
+    QMetaMethodBuilder() = default;
 
     int index() const;
 
@@ -155,7 +156,7 @@ public:
     QByteArray returnType() const;
     void setReturnType(const QByteArray& value);
 
-    QList<QByteArray> parameterTypes() const;
+    QList<QByteArrayView> parameterTypes() const;
     QList<QByteArray> parameterNames() const;
     void setParameterNames(const QList<QByteArray>& value);
 
@@ -168,21 +169,22 @@ public:
     int attributes() const;
     void setAttributes(int value);
 
-    int isConst() const;
+    bool isConst() const;
     void setConst(bool methodIsConst=true);
 
     int revision() const;
     void setRevision(int revision);
 
 private:
-    const QMetaObjectBuilder *_mobj;
-    int _index;
+    const QMetaObjectBuilder *_mobj = nullptr;
+    int _index = 0;
+    QMetaMethod::MethodType _type = QMetaMethod::MethodType::Method;
 
     friend class QMetaObjectBuilder;
     friend class QMetaPropertyBuilder;
 
-    QMetaMethodBuilder(const QMetaObjectBuilder *mobj, int index)
-        : _mobj(mobj), _index(index) {}
+    QMetaMethodBuilder(const QMetaObjectBuilder *mobj, int index, QMetaMethod::MethodType type)
+        : _mobj(mobj), _index(index), _type(type) {}
 
     QMetaMethodBuilderPrivate *d_func() const;
 };
@@ -214,8 +216,11 @@ public:
     bool isEnumOrFlag() const;
     bool isConstant() const;
     bool isFinal() const;
+    bool isVirtual() const;
+    bool isOverride() const;
     bool isAlias() const;
     bool isBindable() const;
+    bool isRequired() const;
 
     void setReadable(bool value);
     void setWritable(bool value);
@@ -228,8 +233,11 @@ public:
     void setEnumOrFlag(bool value);
     void setConstant(bool value);
     void setFinal(bool value);
+    void setVirtual(bool value);
+    void setOverride(bool value);
     void setAlias(bool value);
     void setBindable(bool value);
+    void setRequired(bool value);
 
     int revision() const;
     void setRevision(int revision);
@@ -267,11 +275,16 @@ public:
     bool isScoped() const;
     void setIsScoped(bool value);
 
+    bool is64Bit() const;
+    void setIs64Bit(bool value);
+
     int keyCount() const;
     QByteArray key(int index) const;
     int value(int index) const;
+    std::optional<quint64> value64(int index) const;
 
-    int addKey(const QByteArray& name, int value);
+    int addKey(const QByteArray &name, int value);
+    int addKey(const QByteArray &name, quint64 value);
     void removeKey(int index);
 
 private:

@@ -16,8 +16,6 @@
 
 QT_BEGIN_NAMESPACE
 
-Q_DECLARE_LOGGING_CATEGORY(lcQpaBackingStore)
-
 QBackingStoreRhiSupport::~QBackingStoreRhiSupport()
 {
     reset();
@@ -76,7 +74,7 @@ bool QBackingStoreRhiSupport::create()
         params.fallbackSurface = surface;
         params.window = m_window;
         params.format = m_format;
-        params.shareContext = qt_gl_global_share_context();
+        params.shareContext = QOpenGLContext::globalShareContext();
         rhi = QRhi::create(QRhi::OpenGLES2, &params, flags);
     }
 #endif

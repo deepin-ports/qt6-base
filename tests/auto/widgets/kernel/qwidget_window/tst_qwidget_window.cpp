@@ -31,6 +31,7 @@
 #include <QtWidgets/private/qapplication_p.h>
 
 using namespace QTestPrivate;
+using namespace Qt::StringLiterals;
 
 // Compare a window position that may go through scaling in the platform plugin with fuzz.
 static inline bool qFuzzyCompareWindowPosition(const QPoint &p1, const QPoint p2, int fuzz)
@@ -509,17 +510,24 @@ void tst_QWidget_window::tst_paintEventOnResize_QTBUG50796()
 
     PaintTestWidget *native = new PaintTestWidget(&root);
     native->winId(); // We're testing native widgets
-    native->setGeometry(10, 10, 50, 50);
+    native->setGeometry(50, 50, 50, 50); // position it outside of potentially unsafe area
 
     root.show();
     QVERIFY(QTest::qWaitForWindowExposed(&root));
     QVERIFY(QTest::qWaitForWindowActive(&root));
     QVERIFY(native->isVisible());
 
+    // The top level widget can receive new margins after show
+    // if the size is big enough to end up overlapping safe areas.
+    int safeMarginsResizeCount = 0;
+    connect(root.windowHandle(), &QWindow::safeAreaMarginsChanged, this, [&]() {
+        ++safeMarginsResizeCount;
+    });
+
     native->paintEventCount = 0;
     native->resize(native->width() + 10, native->height() + 10);
     QTest::qWait(50); // Wait for paint events
-    QTRY_COMPARE(native->paintEventCount, 1); // Only one paint event must occur
+    QTRY_COMPARE(native->paintEventCount - safeMarginsResizeCount, 1); // Only one paint event must occur
 }
 
 #if QT_CONFIG(draganddrop)
@@ -805,6 +813,8 @@ void tst_QWidget_window::tst_dnd_events()
     // catch regressions at cross platform code: QGuiApplication::processDrag/Leave().
     if (platformName != "xcb")
         return;
+    if (qgetenv("XDG_CURRENT_DESKTOP").toLower().contains("ubuntu") && QSysInfo::productVersion() == "24.04"_L1)
+        QSKIP("This hangs on Ubuntu 24.04 X11, see also QTBUG-129567.");
 
     const QString expectedDndEvents = "DragEnter DragMove DropEvent DragEnter DragMove "
                                       "DropEvent DragEnter DragMove DropEvent ";
@@ -825,7 +835,8 @@ void tst_QWidget_window::tst_dnd_events()
 
     // Some dnd implementation rely on running internal event loops, so we have to use
     // the following queued signal hack to simulate mouse clicks in the widget.
-    QObject::connect(&dndWidget, &DnDEventRecorder::dragMoveReceived, this, [=]() {
+    auto connection = QObject::connect(&dndWidget, &DnDEventRecorder::dragMoveReceived, this,
+                                        [=]() {
         QTest::mouseRelease(window, Qt::LeftButton);
     }, Qt::QueuedConnection);
 
@@ -836,7 +847,7 @@ void tst_QWidget_window::tst_dnd_events()
     QCOMPARE(dndWidget._dndEvents, expectedDndEvents);
 
     dndWidget._dndEvents.clear();
-    dndWidget.disconnect();
+    dndWidget.disconnect(connection);
     int step = 0;
     QObject::connect(&dndWidget, &DnDEventRecorder::dragMoveReceived, this, [window, &step]() {
         switch (step++) {
@@ -1195,7 +1206,7 @@ void tst_QWidget_window::tst_showhide_count()
             return QObject::eventFilter(receiver, event);
         }
     private:
-        using Entry = QPair<QWidget*, QEvent::Type>;
+        using Entry = std::pair<QWidget*, QEvent::Type>;
         QHash<Entry, int> counter;
     };
 
@@ -1362,10 +1373,10 @@ void tst_QWidget_window::setWindowState_data()
     QString platformName = QGuiApplication::platformName().toLower();
 
     QTest::addColumn<Qt::WindowStates>("state");
-    QTest::newRow("0") << Qt::WindowStates();
-    QTest::newRow("Qt::WindowMaximized") << Qt::WindowStates(Qt::WindowMaximized);
-    QTest::newRow("Qt::WindowMinimized") << Qt::WindowStates(Qt::WindowMinimized);
-    QTest::newRow("Qt::WindowFullScreen") << Qt::WindowStates(Qt::WindowFullScreen);
+    QTest::newRow("nostate") << Qt::WindowStates();
+    QTest::newRow("maximized") << Qt::WindowStates(Qt::WindowMaximized);
+    QTest::newRow("minimized") << Qt::WindowStates(Qt::WindowMinimized);
+    QTest::newRow("fullscreen") << Qt::WindowStates(Qt::WindowFullScreen);
 
     if (platformName != "xcb" && platformName != "windows" && !platformName.startsWith("wayland")
         && platformName != "offscreen")

@@ -1,5 +1,6 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:trivial-parsing-only
 
 #include "qplatformdefs.h"
 #include "qfiledevice.h"
@@ -38,10 +39,10 @@ void QFileDevicePrivate::setError(QFileDevice::FileError err)
     errorString.clear();
 }
 
-void QFileDevicePrivate::setError(QFileDevice::FileError err, const QString &errStr)
+void QFileDevicePrivate::setError(QFileDevice::FileError err, QString errStr)
 {
     error = err;
-    errorString = errStr;
+    errorString = std::move(errStr);
 }
 
 void QFileDevicePrivate::setError(QFileDevice::FileError err, int errNum)
@@ -338,7 +339,8 @@ void QFileDevice::close()
     // reset cached size
     d->cachedSize = 0;
 
-    // keep earlier error from flush
+    // If flush() succeeded but close() failed, copy its error condition;
+    // otherwise, keep the earlier flush() error.
     if (d->fileEngine->close() && flushed)
         unsetError();
     else if (flushed)

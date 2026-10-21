@@ -1,5 +1,6 @@
 // Copyright (C) 2017 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #if !defined(QNSWINDOW_PROTOCOL_IMPLMENTATION)
 
@@ -13,7 +14,9 @@
 
 #include <qpa/qwindowsysteminterface.h>
 
-Q_LOGGING_CATEGORY(lcQpaEvents, "qt.qpa.events");
+#include <QtGui/private/qhighdpiscaling_p.h>
+
+Q_STATIC_LOGGING_CATEGORY(lcQpaEvents, "qt.qpa.events");
 
 static bool isMouseEvent(NSEvent *ev)
 {
@@ -58,6 +61,7 @@ static bool isMouseEvent(NSEvent *ev)
 @end
 
 
+QT_BEGIN_NAMESPACE
 NSWindow<QNSWindowProtocol> *qnswindow_cast(NSWindow *window)
 {
     if ([window conformsToProtocol:@protocol(QNSWindowProtocol)])
@@ -65,6 +69,7 @@ NSWindow<QNSWindowProtocol> *qnswindow_cast(NSWindow *window)
     else
         return nil;
 }
+QT_END_NAMESPACE
 
 @implementation QNSWindow
 #define QNSWINDOW_PROTOCOL_IMPLMENTATION 1
@@ -233,7 +238,8 @@ NSWindow<QNSWindowProtocol> *qnswindow_cast(NSWindow *window)
     // client geometry based on the QWindow's positionPolicy is a noop.
     // Now that we have a NSWindow to read the frame from we re-apply
     // the QWindow geometry, which will move the NSWindow if needed.
-    m_platformWindow->setGeometry(window->geometry());
+    m_platformWindow->setGeometry(QHighDpi::toNativeWindowGeometry(window->geometry(), window));
+
 
     m_platformWindow->setVisible(window->isVisible());
 }
@@ -372,7 +378,7 @@ NSWindow<QNSWindowProtocol> *qnswindow_cast(NSWindow *window)
 
 - (void)miniaturize:(id)sender
 {
-    QBoolBlocker miniaturizeTracker(m_isMinimizing, true);
+    QScopedValueRollback miniaturizeTracker(m_isMinimizing, true);
     [super miniaturize:sender];
 }
 

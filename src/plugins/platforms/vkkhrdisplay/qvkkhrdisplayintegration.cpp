@@ -13,8 +13,8 @@
 #include <QtGui/private/qwindow_p.h>
 #include <QtGui/private/qgenericunixeventdispatcher_p.h>
 #include <QtGui/private/qgenericunixfontdatabase_p.h>
-#include <QtGui/private/qgenericunixthemes_p.h>
-#include <QtGui/private/qgenericunixservices_p.h>
+#include <QtGui/private/qgenericunixtheme_p.h>
+#include <qpa/qplatformservices.h>
 
 #include <QtFbSupport/private/qfbvthandler_p.h>
 
@@ -62,7 +62,8 @@ void QVkKhrDisplayScreen::setVk(QVkKhrDisplayVulkanInstance *inst)
     // Thanks to this deferred screen setup, a QWindow with a size based on the
     // dummy screen size may already exist. Try to resize it.
     QScreen *thisScreen = screen();
-    for (QWindow *window : QGuiApplication::allWindows()) {
+    const auto windows = QGuiApplication::allWindows();
+    for (QWindow *window : windows) {
         if (window->isTopLevel() && window->screen() == thisScreen)
             window->handle()->setGeometry(QRect()); // set fullscreen geometry
     }
@@ -195,7 +196,7 @@ QPlatformFontDatabase *QVkKhrDisplayIntegration::fontDatabase() const
 QPlatformServices *QVkKhrDisplayIntegration::services() const
 {
     if (!m_services)
-        m_services = new QGenericUnixServices;
+        m_services = new QPlatformServices;
 
     return m_services;
 }

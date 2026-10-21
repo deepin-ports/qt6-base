@@ -1,6 +1,7 @@
 // Copyright (C) 2021 Intel Corporation.
 // Copyright (C) 2021 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:cryptography
 
 // for rand_s
 #define _CRT_RAND_S
@@ -130,8 +131,18 @@ struct QRandomGenerator::SystemGenerator
         if (Q_UNLIKELY(fd < 0))
             return 0;
 
-        qint64 n = qt_safe_read(fd, buffer, count);
-        return qMax<qsizetype>(n, 0);        // ignore any errors
+        qsizetype total = 0;
+        while (total != count) {
+            const ssize_t n = ::read(fd, reinterpret_cast<uchar *>(buffer) + total, count - total);
+            if (n > 0)
+                total += n;
+            else if (n < 0 && errno == EINTR)
+                continue;
+            else
+                break; // EOF and other errors
+        }
+
+        return total;
     }
 
 #elif defined(Q_OS_WIN)
@@ -202,9 +213,12 @@ static void fallback_update_seed(unsigned value)
     seed.fetchAndXorRelaxed(value);
 }
 
+// this function is pretty big, so optimize for size
 Q_NEVER_INLINE
-#ifdef Q_CC_GNU
-__attribute__((cold))   // this function is pretty big, so optimize for size
+#if __has_attribute(optimize)  // GCC
+__attribute__((optimize("Os")))
+#elif __has_attribute(minsize) // Clang
+__attribute__((minsize))
 #endif
 static void fallback_fill(quint32 *ptr, qsizetype left) noexcept
 {
@@ -292,10 +306,7 @@ Q_NEVER_INLINE void QRandomGenerator::SystemGenerator::generate(quint32 *begin, 
     }
 
     qsizetype filled = 0;
-    if (qHasHwrng() && (uint(qt_randomdevice_control.loadAcquire()) & SkipHWRNG) == 0)
-        filled += qRandomCpu(buffer, count);
-
-    if (filled != count && (uint(qt_randomdevice_control.loadAcquire()) & SkipSystemRNG) == 0) {
+    if ((uint(qt_randomdevice_control.loadAcquire()) & SkipSystemRNG) == 0) {
         qsizetype bytesFilled =
                 fillBuffer(buffer + filled, (count - filled) * qsizetype(sizeof(*buffer)));
         filled += bytesFilled / qsizetype(sizeof(*buffer));
@@ -698,7 +709,7 @@ inline QRandomGenerator::SystemGenerator &QRandomGenerator::SystemGenerator::sel
 
     Returns the minimum value that QRandomGenerator may ever generate. That is, 0.
 
-    \sa max(), QRandomGenerator64::min()
+    \sa max()
  */
 
 /*!
@@ -707,7 +718,7 @@ inline QRandomGenerator::SystemGenerator &QRandomGenerator::SystemGenerator::sel
     Returns the maximum value that QRandomGenerator may ever generate. That is,
     \c {std::numeric_limits<result_type>::max()}.
 
-    \sa min(), QRandomGenerator64::max()
+    \sa min()
  */
 
 /*!
@@ -827,7 +838,7 @@ inline QRandomGenerator::SystemGenerator &QRandomGenerator::SystemGenerator::sel
     if it is infinite or NaN, the result will be infinite or NaN too (that is,
     not random).
 
-    \sa generateDouble(), bounded()
+    \sa generateDouble(), bounded(quint64)
  */
 
 /*!

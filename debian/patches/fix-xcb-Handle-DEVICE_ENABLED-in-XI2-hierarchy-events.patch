@@ -1,8 +1,12 @@
-Index: qt6-base/src/plugins/platforms/xcb/qxcbconnection_xi2.cpp
-===================================================================
---- qt6-base.orig/src/plugins/platforms/xcb/qxcbconnection_xi2.cpp
-+++ qt6-base/src/plugins/platforms/xcb/qxcbconnection_xi2.cpp
-@@ -1113,10 +1113,13 @@ void QXcbConnection::xi2HandleHierarchyE
+
+
+Refreshed for Debian forky Qt 6.11.2.
+
+diff --git a/src/plugins/platforms/xcb/qxcbconnection_xi2.cpp b/src/plugins/platforms/xcb/qxcbconnection_xi2.cpp
+index 3241e557..1b33b1c4 100644
+--- a/src/plugins/platforms/xcb/qxcbconnection_xi2.cpp
++++ b/src/plugins/platforms/xcb/qxcbconnection_xi2.cpp
+@@ -1114,10 +1114,13 @@ void QXcbConnection::xi2HandleHierarchyEvent(void *event)
      // We don't report anything for DEVICE_ENABLED or DEVICE_DISABLED
      // (but often that goes with adding or removal anyway).
      // We don't react to SLAVE_ATTACHED or SLAVE_DETACHED either.

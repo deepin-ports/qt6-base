@@ -1,6 +1,7 @@
 // Copyright (C) 2017 The Qt Company Ltd.
 // Copyright (C) 2013 John Layt <jlayt@kde.org>
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #ifndef QTIMEZONE_H
 #define QTIMEZONE_H
@@ -81,6 +82,9 @@ class Q_CORE_EXPORT QTimeZone
         ShortData s;
     };
     QTimeZone(ShortData sd) : d(sd) {}
+    QTimeZone(Qt::TimeSpec) Q_DECL_EQ_DELETE_X(
+        "Would be treated as int offsetSeconds. "
+        "Use QTimeZone::UTC or QTimeZone::LocalTime instead.");
 
 public:
     // Sane UTC offsets range from -16 to +16 hours:
@@ -175,11 +179,9 @@ public:
 #  endif
     QString comment() const;
 
-    QString displayName(const QDateTime &atDateTime,
-                        QTimeZone::NameType nameType = QTimeZone::DefaultName,
+    QString displayName(const QDateTime &atDateTime, NameType nameType = DefaultName,
                         const QLocale &locale = QLocale()) const;
-    QString displayName(QTimeZone::TimeType timeType,
-                        QTimeZone::NameType nameType = QTimeZone::DefaultName,
+    QString displayName(TimeType timeType, NameType nameType = DefaultName,
                         const QLocale &locale = QLocale()) const;
     QString abbreviation(const QDateTime &atDateTime) const;
 

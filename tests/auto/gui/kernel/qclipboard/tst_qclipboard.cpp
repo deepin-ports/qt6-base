@@ -9,6 +9,7 @@
 #include <QProcess>
 #endif
 #include <QtCore/QDebug>
+#include <QtCore/QElapsedTimer>
 #include <QtCore/QFileInfo>
 #include <QtCore/QDir>
 #include <QtCore/QVariant>
@@ -23,8 +24,12 @@
 #  include <QtGui/private/qguiapplication_p.h>
 #  include <QtGui/qwindowsmimeconverter.h>
 #  include <QtGui/qpa/qplatformintegration.h>
+#  include <QtCore/QScopeGuard>
 #  include <QtCore/qt_windows.h>
+#  include <ole2.h>
 #endif
+
+using namespace Qt::StringLiterals;
 
 class tst_QClipboard : public QObject
 {
@@ -47,6 +52,7 @@ private slots:
     void testWindowsMimeRegisterType();
     void testWindowsMime_data();
     void testWindowsMime();
+    void copyImageOffersPngStream();
 #  endif // Q_OS_WIN
 #endif // clipboard
 };
@@ -58,6 +64,10 @@ void tst_QClipboard::initTestCase()
 #endif
     if (QGuiApplication::platformName().startsWith(QLatin1String("wayland"), Qt::CaseInsensitive))
         QSKIP("Wayland: Manipulating the clipboard requires real input events. Can't auto test.");
+    if (qgetenv("XDG_CURRENT_DESKTOP").toLower().contains("ubuntu:gnome")
+        && QSysInfo::productVersion() == "24.04"_L1
+        && QSysInfo::prettyProductName() == "Ubuntu 24.04 LTS"_L1)
+        QSKIP("This hangs on Ubuntu 24.04(.0) GNOME/X11, see also QTBUG-129567.");
 }
 
 #if QT_CONFIG(clipboard)
@@ -66,6 +76,21 @@ void tst_QClipboard::init()
 #if QT_CONFIG(process) && !defined(Q_OS_ANDROID)
     const QString testdataDir = QFileInfo(QFINDTESTDATA("copier")).absolutePath();
     QVERIFY2(QDir::setCurrent(testdataDir), qPrintable("Could not chdir to " + testdataDir));
+#endif
+#if defined(Q_OS_QNX)
+    QDir clipboardDir("clipboard");
+
+    if (!clipboardDir.exists()) {
+        QVERIFY2(clipboardDir.mkpath("."), "Failed to create clipboard directory");
+    }
+
+    QFile file("clipboard/.qnxclipboard");
+    if (!file.exists()) {
+        QVERIFY2(file.open(QIODevice::WriteOnly), "Failed to create .qnxclipboard");
+        file.close();
+    }
+
+    qputenv("QQNX_CLIPBOARD", QFile::encodeName(clipboardDir.absolutePath()));
 #endif
 }
 
@@ -211,6 +236,9 @@ static bool runHelper(const QString &program, const QStringList &arguments, QByt
 #if QT_CONFIG(process)
     QProcess process;
     process.setProcessChannelMode(QProcess::ForwardedChannels);
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert(QStringLiteral("QT_QPA_PLATFORM"), QGuiApplication::platformName());
+    process.setProcessEnvironment(env);
     process.start(program, arguments);
     if (!process.waitForStarted()) {
         *errorMessage = "Unable to start '" + program.toLocal8Bit() + " ': "
@@ -260,6 +288,8 @@ void tst_QClipboard::copy_exit_paste()
     // ### It's still possible to test copy/paste - just keep the apps running
     if (!PlatformClipboard::isAvailable())
         QSKIP("Native clipboard not working in this setup");
+    if (QGuiApplication::platformName().startsWith(QLatin1String("offscreen"), Qt::CaseInsensitive))
+        QSKIP("Offscreen platform does not support cross-process clipboard");
     const QString stringArgument(QStringLiteral("Test string."));
     QByteArray errorMessage;
     QVERIFY2(runHelper(QStringLiteral("copier/copier"), QStringList(stringArgument), &errorMessage),
@@ -280,6 +310,8 @@ void tst_QClipboard::copyImage()
 #if QT_CONFIG(process)
     if (!PlatformClipboard::isAvailable())
         QSKIP("Native clipboard not working in this setup");
+    if (QGuiApplication::platformName().startsWith(QLatin1String("offscreen"), Qt::CaseInsensitive))
+        QSKIP("Offscreen platform does not support cross-process clipboard");
     QImage image(100, 100, QImage::Format_ARGB32);
     image.fill(QColor(Qt::transparent));
     image.setPixel(QPoint(1, 0), QColor(Qt::blue).rgba());
@@ -527,6 +559,43 @@ void tst_QClipboard::testWindowsMime()
     QTRY_VERIFY(testMime.formatsForMimeCalled);
 
     nativeWindowsApp->unregisterMime(&testMime);
+}
+
+// Regression test for QTBUG-126191: MS Office requests CF_PNG via
+// TYMED_ISTREAM and rejects results delivered with any other tymed.
+void tst_QClipboard::copyImageOffersPngStream()
+{
+    if (!PlatformClipboard::isAvailable())
+        QSKIP("Native clipboard not working in this setup");
+    if (QGuiApplication::platformName().startsWith("offscreen"_L1, Qt::CaseInsensitive))
+        QSKIP("Offscreen platform does not support clipboard");
+
+    QImage source(2, 1, QImage::Format_ARGB32);
+    source.setPixel(0, 0, qRgba(0xff, 0x00, 0x00, 0xff)); // opaque
+    source.setPixel(1, 0, qRgba(0x00, 0x00, 0x00, 0x00)); // transparent
+    QGuiApplication::clipboard()->setImage(source);
+
+    IDataObject *pDataObj = nullptr;
+    QVERIFY(SUCCEEDED(::OleGetClipboard(&pDataObj)));
+    auto releaseDataObj = qScopeGuard([&] { pDataObj->Release(); });
+
+    FORMATETC fc = { CLIPFORMAT(::RegisterClipboardFormat(L"PNG")),
+                     nullptr, DVASPECT_CONTENT, -1, TYMED_ISTREAM };
+    STGMEDIUM medium = {};
+    QCOMPARE(pDataObj->GetData(&fc, &medium), S_OK);
+    auto releaseMedium = qScopeGuard([&] { ::ReleaseStgMedium(&medium); });
+    QCOMPARE(medium.tymed, DWORD(TYMED_ISTREAM));
+
+    QByteArray pngBytes;
+    char buf[4096];
+    ULONG bytesRead = 0;
+    while (medium.pstm->Read(buf, sizeof(buf), &bytesRead) == S_OK && bytesRead > 0)
+        pngBytes.append(buf, qsizetype(bytesRead));
+
+    QImage decoded;
+    QVERIFY(decoded.loadFromData(pngBytes, "PNG"));
+    QCOMPARE(qAlpha(decoded.pixel(0, 0)), 0xff);
+    QCOMPARE(qAlpha(decoded.pixel(1, 0)), 0x00);
 }
 
 #  endif // Q_OS_WIN

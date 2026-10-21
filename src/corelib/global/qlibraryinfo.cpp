@@ -1,20 +1,22 @@
 // Copyright (C) 2021 The Qt Company Ltd.
 // Copyright (C) 2021 Intel Corporation.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:execute-external-code
 
 #include "qdir.h"
 #include "qstringlist.h"
 #include "qfile.h"
 #if QT_CONFIG(settings)
+#include "qresource.h"
 #include "qsettings.h"
 #endif
 #include "qlibraryinfo.h"
 #include "qlibraryinfo_p.h"
-#include "qscopedpointer.h"
 
 #include "qcoreapplication.h"
 
-#include "private/qglobal_p.h"
+#include "private/qcoreapplication_p.h"
+#include "private/qfilesystementry_p.h"
 #include "archdetect.cpp"
 #include "qconfig.cpp"
 
@@ -30,6 +32,8 @@
 #    include <qt_windows.h>
 #endif
 
+#include <memory>
+
 QT_BEGIN_NAMESPACE
 
 using namespace Qt::StringLiterals;
@@ -38,7 +42,7 @@ extern void qDumpCPUFeatures(); // in qsimd.cpp
 
 #if QT_CONFIG(settings)
 
-static QSettings *findConfiguration();
+static std::unique_ptr<QSettings> findConfiguration();
 
 struct QLibrarySettings
 {
@@ -47,7 +51,7 @@ struct QLibrarySettings
     bool havePaths();
     QSettings *configuration();
 
-    QScopedPointer<QSettings> settings;
+    std::unique_ptr<QSettings> settings;
     bool paths;
     bool reloadOnQAppAvailable;
 };
@@ -60,14 +64,14 @@ QLibrarySettings::QLibrarySettings() : paths(false), reloadOnQAppAvailable(false
 
 QSettings *QLibrarySettings::configuration()
 {
-    if (reloadOnQAppAvailable && QCoreApplication::instance() != nullptr)
+    if (reloadOnQAppAvailable && QCoreApplication::instanceExists())
         load();
-    return settings.data();
+    return settings.get();
 }
 
 bool QLibrarySettings::havePaths()
 {
-    if (reloadOnQAppAvailable && QCoreApplication::instance() != nullptr)
+    if (reloadOnQAppAvailable && QCoreApplication::instanceExists())
         load();
     return paths;
 }
@@ -75,8 +79,8 @@ bool QLibrarySettings::havePaths()
 void QLibrarySettings::load()
 {
     // If we get any settings here, those won't change when the application shows up.
-    settings.reset(findConfiguration());
-    reloadOnQAppAvailable = (settings.data() == nullptr && QCoreApplication::instance() == nullptr);
+    settings = findConfiguration();
+    reloadOnQAppAvailable = !settings && !QCoreApplication::instanceExists();
 
     if (settings) {
         // This code needs to be in the regular library, as otherwise a qt.conf that
@@ -96,14 +100,14 @@ void QLibraryInfoPrivate::setQtconfManualPath(const QString *path)
     qtconfManualPath = path;
 }
 
-static QSettings *findConfiguration()
+static std::unique_ptr<QSettings> findConfiguration()
 {
     if (qtconfManualPath)
-        return new QSettings(*qtconfManualPath, QSettings::IniFormat);
+        return std::make_unique<QSettings>(*qtconfManualPath, QSettings::IniFormat);
 
     QString qtconfig = QStringLiteral(":/qt/etc/qt.conf");
-    if (QFile::exists(qtconfig))
-        return new QSettings(qtconfig, QSettings::IniFormat);
+    if (QResource(qtconfig, QLocale::c()).isValid())
+        return std::make_unique<QSettings>(qtconfig, QSettings::IniFormat);
 #ifdef Q_OS_DARWIN
     CFBundleRef bundleRef = CFBundleGetMainBundle();
     if (bundleRef) {
@@ -115,18 +119,18 @@ static QSettings *findConfiguration()
             QCFString path = CFURLCopyFileSystemPath(urlRef, kCFURLPOSIXPathStyle);
             qtconfig = QDir::cleanPath(path);
             if (QFile::exists(qtconfig))
-                return new QSettings(qtconfig, QSettings::IniFormat);
+                return std::make_unique<QSettings>(qtconfig, QSettings::IniFormat);
         }
     }
 #endif
-    if (QCoreApplication::instance()) {
-        QDir pwd(QCoreApplication::applicationDirPath());
-        qtconfig = pwd.filePath(u"qt" QT_STRINGIFY(QT_VERSION_MAJOR) ".conf"_s);
+    if (QCoreApplication::instanceExists()) {
+        QString pwd = QCoreApplication::applicationDirPath();
+        qtconfig = pwd + u"/qt" QT_STRINGIFY(QT_VERSION_MAJOR) ".conf"_s;
         if (QFile::exists(qtconfig))
-            return new QSettings(qtconfig, QSettings::IniFormat);
-        qtconfig = pwd.filePath("qt.conf"_L1);
+            return std::make_unique<QSettings>(qtconfig, QSettings::IniFormat);
+        qtconfig = pwd + u"/qt.conf";
         if (QFile::exists(qtconfig))
-            return new QSettings(qtconfig, QSettings::IniFormat);
+            return std::make_unique<QSettings>(qtconfig, QSettings::IniFormat);
     }
     return nullptr;     //no luck
 }
@@ -191,8 +195,10 @@ QLibraryInfo::QLibraryInfo()
 #    define COMPILER_STRING "MSVC 2017"
 #  elif _MSC_VER < 1930
 #    define COMPILER_STRING "MSVC 2019"
-#  elif _MSC_VER < 2000
+#  elif _MSC_VER < 1950
 #    define COMPILER_STRING "MSVC 2022"
+#  elif _MSC_VER < 2000
+#    define COMPILER_STRING "MSVC 2026"
 #  else
 #    define COMPILER_STRING "MSVC _MSC_VER " QT_STRINGIFY(_MSC_VER)
 #  endif
@@ -268,9 +274,7 @@ QVersionNumber QLibraryInfo::version() noexcept
 
 static QString prefixFromAppDirHelper()
 {
-    QString appDir;
-
-    if (QCoreApplication::instance()) {
+    if (QCoreApplication::instanceExists()) {
 #ifdef Q_OS_DARWIN
         CFBundleRef bundleRef = CFBundleGetMainBundle();
         if (bundleRef) {
@@ -288,12 +292,10 @@ static QString prefixFromAppDirHelper()
         }
 #endif // Q_OS_DARWIN
         // We make the prefix path absolute to the executable's directory.
-        appDir = QCoreApplication::applicationDirPath();
+        return QCoreApplication::applicationDirPath();
     } else {
-        appDir = QDir::currentPath();
+        return QDir::currentPath();
     }
-
-    return appDir;
 }
 
 #if QT_CONFIG(relocatable)
@@ -391,7 +393,9 @@ static QString getRelocatablePrefix(QLibraryInfoPrivate::UsageMode usageMode)
     DWORD pathSize = GetModuleFileName(hModule, buffer, kBufferSize);
     const QString qtCoreFilePath = QString::fromWCharArray(buffer, int(pathSize));
     const QString qtCoreDirPath = QFileInfo(qtCoreFilePath).absolutePath();
-    pathSize = GetModuleFileName(NULL, buffer, kBufferSize);
+
+    hModule = reinterpret_cast<HMODULE>(QCoreApplicationPrivate::mainInstanceHandle);
+    pathSize = GetModuleFileName(hModule, buffer, kBufferSize);
     const QString exeDirPath = QFileInfo(QString::fromWCharArray(buffer, int(pathSize))).absolutePath();
     if (QFileInfo(exeDirPath) == QFileInfo(qtCoreDirPath)) {
         // QtCore DLL is next to the executable. This is either a windeployqt'ed executable or an
@@ -603,25 +607,42 @@ static QVariant libraryPathToValue(QLibraryInfo::LibraryPath loc)
 }
 #endif // settings
 
+// TODO: There apparently are paths that are both absolute and relative for QFileSystemEntry.
+//       In particular on windows.
+
+static bool pathIsRelative(const QString &path)
+{
+    using FromInternalPath = QFileSystemEntry::FromInternalPath;
+    return !path.startsWith(':'_L1) && QFileSystemEntry(path, FromInternalPath{}).isRelative();
+}
+
+static bool pathIsAbsolute(const QString &path)
+{
+    using FromInternalPath = QFileSystemEntry::FromInternalPath;
+    return path.startsWith(':'_L1) || QFileSystemEntry(path, FromInternalPath{}).isAbsolute();
+}
+
 QStringList QLibraryInfoPrivate::paths(QLibraryInfo::LibraryPath p,
                                        UsageMode usageMode)
 {
     const QLibraryInfo::LibraryPath loc = p;
     QList<QString> ret;
     bool fromConf = false;
+    bool pathsAreAbsolute = true;
 #if QT_CONFIG(settings)
     if (havePaths()) {
         fromConf = true;
 
         QVariant value = libraryPathToValue(loc);
         if (value.isValid()) {
-
             if (auto *asList = get_if<QList<QString>>(&value))
                 ret = std::move(*asList);
             else
                 ret = QList<QString>({ std::move(value).toString()});
-            for (qsizetype i = 0, end = ret.size(); i < end; ++i)
+            for (qsizetype i = 0, end = ret.size(); i < end; ++i) {
                 ret[i] = normalizePath(ret[i]);
+                pathsAreAbsolute = pathsAreAbsolute && pathIsAbsolute(ret[i]);
+            }
         }
     }
 #endif // settings
@@ -642,10 +663,12 @@ QStringList QLibraryInfoPrivate::paths(QLibraryInfo::LibraryPath p,
             noConfResult = QString::fromLocal8Bit(path);
 #endif
         }
-        if (!noConfResult.isEmpty())
+        if (!noConfResult.isEmpty()) {
+            pathsAreAbsolute = pathsAreAbsolute && pathIsAbsolute(noConfResult);
             ret.push_back(std::move(noConfResult));
+        }
     }
-    if (ret.isEmpty())
+    if (ret.isEmpty() || pathsAreAbsolute)
         return ret;
 
     QString baseDir;
@@ -656,7 +679,7 @@ QStringList QLibraryInfoPrivate::paths(QLibraryInfo::LibraryPath p,
         baseDir = QLibraryInfoPrivate::path(QLibraryInfo::PrefixPath, usageMode);
     }
     for (qsizetype i = 0, end = ret.size(); i < end; ++i)
-        if (QDir::isRelativePath(ret[i]))
+        if (pathIsRelative(ret[i]))
             ret[i] = QDir::cleanPath(baseDir + u'/' +  std::move(ret[i]));
     return ret;
 }
@@ -688,8 +711,7 @@ QString QLibraryInfoPrivate::path(QLibraryInfo::LibraryPath p, UsageMode usageMo
 QStringList QLibraryInfo::platformPluginArguments(const QString &platformName)
 {
 #if QT_CONFIG(settings)
-    QScopedPointer<const QSettings> settings(findConfiguration());
-    if (!settings.isNull()) {
+    if (const auto settings = findConfiguration()) {
         const QString key = "Platforms/"_L1
                 + platformName
                 + "Arguments"_L1;
@@ -729,7 +751,15 @@ QStringList QLibraryInfo::platformPluginArguments(const QString &platformName)
 
 /*!
     \typealias QLibraryInfo::LibraryLocation
-    \deprecated Use LibraryPath with QLibraryInfo::path() instead.
+    \deprecated [6.0] Use LibraryPath with QLibraryInfo::path() instead.
+*/
+
+/*!
+    \headerfile <QtVersion>
+    \inmodule QtCore
+    \ingroup funclists
+    \brief Information about which Qt version the application is running on,
+           and the version it was compiled against.
 */
 
 /*!

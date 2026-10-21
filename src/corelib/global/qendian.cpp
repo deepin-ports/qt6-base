@@ -1,6 +1,7 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // Copyright (C) 2018 Intel Corporation.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #include "qendian.h"
 
@@ -835,7 +836,7 @@ size_t simdSwapLoop(const uchar *, size_t, uchar *) noexcept
 }
 #endif
 
-template <typename T> static Q_ALWAYS_INLINE
+template <typename T> Q_ALWAYS_INLINE static
 void *bswapLoop(const uchar *src, size_t n, uchar *dst) noexcept
 {
     // Buffers cannot partially overlap: either they're identical or totally

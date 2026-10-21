@@ -1,5 +1,6 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:significant reason:default
 
 #include "qwindowsopengltester.h"
 #include "qwindowscontext.h"
@@ -65,7 +66,9 @@ private:
 
 QDirect3D9Handle::QDirect3D9Handle()
 {
+#ifndef QT_NO_OPENGL
     m_direct3D9 = Direct3DCreate9(D3D_SDK_VERSION);
+#endif
 }
 
 QDirect3D9Handle::~QDirect3D9Handle()
@@ -406,8 +409,8 @@ bool QWindowsOpenGLTester::testDesktopGL()
             qCDebug(lcQpaGl, "OpenGL 1.x entry points not found");
         }
 
-        // Check for a shader-specific function.
-        if (WGL_GetProcAddress("glCreateShader")) {
+        // Check for a shader-specific function, as well as FBO support.
+        if (WGL_GetProcAddress("glCreateShader") && WGL_GetProcAddress("glBindFramebuffer")) {
             result = true;
             qCDebug(lcQpaGl, "OpenGL 2.0 entry points available");
         } else {

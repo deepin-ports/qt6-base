@@ -10,7 +10,8 @@ function(qt_get_library_name_without_prefix_and_suffix out_var file_path)
     if(NOT file_path MATCHES "^-") # not a linker flag
         get_filename_component(basename "${file_path}" NAME_WE)
         get_filename_component(ext "${file_path}" EXT)
-        if(NOT ext) # seems like a library name without prefix and suffix
+        if(NOT ext AND NOT IS_ABSOLUTE "${file_path}")
+            # seems like a library name without prefix and suffix
             set(${out_var} "${file_path}" PARENT_SCOPE)
             return()
         endif()
@@ -132,4 +133,23 @@ function(qt_internal_path_is_relative_to_qt_lib_path
     endforeach()
     set(${out_var_is_relative} "${is_relative}" PARENT_SCOPE)
     set(${out_var_relative_path} "${relative_path_value}" PARENT_SCOPE)
+endfunction()
+
+# Checks if a filename looks like a library file (e.g., libfoo.a, /usr/lib/libbar.so.1.2.3).
+# Returns TRUE if it's a library file, FALSE otherwise.
+function(qt_is_library_file out_var file_path)
+    set(is_library FALSE)
+
+    qt_strip_library_version_suffix(file_path "${file_path}")
+    get_filename_component(ext "${file_path}" EXT)
+    if(ext)
+        foreach(libsuffix ${LIBRARY_SUFFIXES})
+            if(ext STREQUAL libsuffix)
+                set(is_library TRUE)
+                break()
+            endif()
+        endforeach()
+    endif()
+
+    set(${out_var} "${is_library}" PARENT_SCOPE)
 endfunction()

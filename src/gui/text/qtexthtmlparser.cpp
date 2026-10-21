@@ -1,5 +1,6 @@
 // Copyright (C) 2016 The Qt Company Ltd.
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:data-parser
 
 #include "qtexthtmlparser_p.h"
 
@@ -364,6 +365,7 @@ static const QTextHtmlElement elements[Html_NumElements]= {
     { "cite",       Html_cite,       QTextHtmlElement::DisplayInline },
     { "code",       Html_code,       QTextHtmlElement::DisplayInline },
     { "dd",         Html_dd,         QTextHtmlElement::DisplayBlock },
+    { "del",        Html_del,        QTextHtmlElement::DisplayInline },
     { "dfn",        Html_dfn,        QTextHtmlElement::DisplayInline },
     { "div",        Html_div,        QTextHtmlElement::DisplayBlock },
     { "dl",         Html_dl,         QTextHtmlElement::DisplayBlock },
@@ -1566,7 +1568,7 @@ void QTextHtmlParserNode::applyForegroundImage(qint64 searchKey, const QTextDocu
 void QTextHtmlParserNode::applyBackgroundImage(const QString &url, const QTextDocument *resourceProvider)
 {
     if (!url.isEmpty() && resourceProvider) {
-        QVariant val = resourceProvider->resource(QTextDocument::ImageResource, url);
+        QVariant val = resourceProvider->resource(QTextDocument::ImageResource, QUrl{url});
 
         if (QCoreApplication::instance()->thread() != QThread::currentThread()) {
             // must use images in non-GUI threads
@@ -2026,7 +2028,7 @@ void QTextHtmlParser::importStyleSheet(const QString &href)
         if (externalStyleSheets.at(i).url == href)
             return;
 
-    QVariant res = resourceProvider->resource(QTextDocument::StyleSheetResource, href);
+    QVariant res = resourceProvider->resource(QTextDocument::StyleSheetResource, QUrl{href});
     QString css;
     if (res.userType() == QMetaType::QString) {
         css = res.toString();
@@ -2132,6 +2134,7 @@ QList<QCss::Declaration> standardDeclarationForNode(const QTextHtmlParserNode &n
         decl.d->inheritable = true;
         decls << decl;
         break;
+    case Html_del:
     case Html_s:
         decl = QCss::Declaration();
         decl.d->property = "text-decoration"_L1;
@@ -2274,7 +2277,8 @@ bool QTextHtmlParser::nodeIsChildOf(int i, QTextHTMLElements id) const
     return false;
 }
 
-QT_END_NAMESPACE
 #endif // QT_NO_CSSPARSER
+
+QT_END_NAMESPACE
 
 #endif // QT_NO_TEXTHTMLPARSER

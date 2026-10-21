@@ -1,6 +1,7 @@
 // Copyright (C) 2021 The Qt Company Ltd.
 // Copyright (C) 2013 Aleix Pol Gonzalez <aleixpol@kde.org>
 // SPDX-License-Identifier: LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only
+// Qt-Security score:critical reason:data-parser
 
 #include "qcollator_p.h"
 #include "qstringlist.h"
@@ -168,9 +169,7 @@ QCollator &QCollator::operator=(const QCollator &other)
 
 /*!
     \fn void QCollator::swap(QCollator &other)
-
-    Swaps this collator with \a other. This function is very fast and
-    never fails.
+    \memberswap{collator}
 */
 
 /*!
@@ -180,6 +179,9 @@ void QCollator::detach()
 {
     if (d->ref.loadRelaxed() != 1) {
         QCollatorPrivate *x = new QCollatorPrivate(d->locale);
+        x->caseSensitivity = d->caseSensitivity;
+        x->numericMode = d->numericMode;
+        x->ignorePunctuation = d->ignorePunctuation;
         if (!d->ref.deref())
             delete d;
         d = x;
@@ -470,8 +472,7 @@ QCollatorSortKey& QCollatorSortKey::operator=(const QCollatorSortKey &other)
 
 /*!
     \fn void QCollatorSortKey::swap(QCollatorSortKey & other)
-
-    Swaps this collator key with \a other.
+    \memberswap{collator key}
 */
 
 /*!
