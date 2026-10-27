@@ -41,7 +41,7 @@ libQt6Test.so.6 libqt6test6 #MINVER#
  _ZN5QTest12CrashHandler18FatalSignalHandler12fatalSignalsE@Qt_6 6.8.0
  _ZN5QTest12CrashHandler18FatalSignalHandler12pauseOnCrashE@Qt_6 6.8.0
  _ZN5QTest12CrashHandler18FatalSignalHandler13actionHandlerEiP9siginfo_tPv@Qt_6 6.8.0
- _ZN5QTest12CrashHandler18FatalSignalHandler15crashingSignalsE@Qt_6 6.8.0
+#MISSING: 6.8.0# _ZN5QTest12CrashHandler18FatalSignalHandler15crashingSignalsE@Qt_6 6.8.0
  _ZN5QTest12CrashHandler18FatalSignalHandler18alternateStackSizeEv@Qt_6 6.8.0
  _ZN5QTest12CrashHandler18FatalSignalHandler18freeAlternateStackEv@Qt_6 6.8.0
  _ZN5QTest12CrashHandler18FatalSignalHandler19setupAlternateStackEv@Qt_6 6.8.0

@@ -4106,6 +4106,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN9QListView10timerEventEP11QTimerEvent@Qt_6 6.1.2
  _ZN9QListView10wheelEventEP11QWheelEvent@Qt_6 6.1.2
  _ZN9QListView11dataChangedERK11QModelIndexS2_RK5QListIiE@Qt_6 6.1.2
+ _ZN9QListView11eventFilterEP7QObjectP6QEvent@Qt_6 6.8.0
  _ZN9QListView11qt_metacallEN11QMetaObject4CallEiPPv@Qt_6 6.1.2
  _ZN9QListView11qt_metacastEPKc@Qt_6 6.1.2
  _ZN9QListView11resizeEventEP12QResizeEvent@Qt_6 6.1.2
@@ -4129,6 +4130,7 @@ libQt6Widgets.so.6 libqt6widgets6 #MINVER#
  _ZN9QListView14mouseMoveEventEP11QMouseEvent@Qt_6 6.1.2
  _ZN9QListView14resizeContentsEii@Qt_6 6.1.2
  _ZN9QListView14setModelColumnEi@Qt_6 6.1.2
+ _ZN9QListView15mousePressEventEP11QMouseEvent@Qt_6 6.8.0
  _ZN9QListView16scrollContentsByEii@Qt_6 6.1.2
  _ZN9QListView16selectionChangedERK14QItemSelectionS2_@Qt_6 6.1.2
  _ZN9QListView16setItemAlignmentE6QFlagsIN2Qt13AlignmentFlagEE@Qt_6 6.1.2
